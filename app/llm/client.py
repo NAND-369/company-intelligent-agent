@@ -99,7 +99,7 @@ class GeminiLLMClient(LLMClient):
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-3.5-flash",
+        model: str = "gemini-2.5-flash",
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
     ) -> None:
@@ -107,7 +107,8 @@ class GeminiLLMClient(LLMClient):
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
-        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        clean_model = model.replace("models/", "").strip()
+        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
 
     async def generate_text(self, system_prompt: str, user_prompt: str) -> str:
         payload = {
