@@ -32,8 +32,9 @@ async def test_root_landing_page_success(async_client: AsyncClient) -> None:
     assert "text/html" in response.headers.get("content-type", "")
     html_text = response.text
     assert "Company Intelligence Agent" in html_text
-    assert "Production System Online" in html_text
-    assert "Autonomous Execution Pipeline" in html_text
-    assert "What the Agent Produces" in html_text
+    assert "COMPANIES IN" in html_text
+    assert "THE PIPELINE" in html_text
+    assert "NOT A SUMMARY" in html_text
+    assert "FROM EVIDENCE" in html_text
     assert "/docs" in html_text
     assert "/health" in html_text
