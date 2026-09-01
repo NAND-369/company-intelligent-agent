@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api.routes_companies import router as companies_router
 from app.api.routes_health import router as health_router
+from app.api.routes_landing import router as landing_router
 from app.api.routes_pipeline import router as pipeline_router
 from app.config.settings import get_settings
 from app.core.scheduler import get_scheduler
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
         )
 
     # Include Routes
+    application.include_router(landing_router)
     application.include_router(health_router)
     application.include_router(pipeline_router)
     application.include_router(companies_router)

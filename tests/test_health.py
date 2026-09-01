@@ -22,3 +22,18 @@ async def test_health_check_no_auth_required(async_client: AsyncClient) -> None:
     """Test that GET /health is publicly accessible without authentication headers."""
     response = await async_client.get("/health", headers={})
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_root_landing_page_success(async_client: AsyncClient) -> None:
+    """Test that GET / returns 200 OK with the HTML landing page."""
+    response = await async_client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    html_text = response.text
+    assert "Company Intelligence Agent" in html_text
+    assert "Production System Online" in html_text
+    assert "Autonomous Execution Pipeline" in html_text
+    assert "What the Agent Produces" in html_text
+    assert "/docs" in html_text
+    assert "/health" in html_text
