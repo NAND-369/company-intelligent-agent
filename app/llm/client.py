@@ -99,7 +99,7 @@ class GeminiLLMClient(LLMClient):
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-3.6-flash",
+        model: str = "gemini-3.1-flash-lite",
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
     ) -> None:

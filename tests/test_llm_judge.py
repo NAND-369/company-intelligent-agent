@@ -342,13 +342,13 @@ async def test_gemini_client_header_auth_and_url_safety(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
 
-    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.6-flash")
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.1-flash-lite")
     await client.generate_text("System", "User")
 
     assert captured_request["headers"].get("x-goog-api-key") == secret_key
     assert captured_request["params"] is None
     assert secret_key not in captured_request["url"]
-    assert "/models/gemini-3.6-flash:generateContent" in captured_request["url"]
+    assert "/models/gemini-3.1-flash-lite:generateContent" in captured_request["url"]
     assert captured_request["json"]["generationConfig"] == {"response_mime_type": "application/json"}
 
 
@@ -366,7 +366,7 @@ async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.Mon
             json={
                 "error": {
                     "code": 404,
-                    "message": "models/gemini-3.6-flash is not found for API version v1beta",
+                    "message": "models/gemini-3.1-flash-lite is not found for API version v1beta",
                     "status": "NOT_FOUND",
                 }
             },
@@ -375,12 +375,12 @@ async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_404)
 
-    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.6-flash")
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.1-flash-lite")
     with pytest.raises(LLMClientError) as exc_info:
         await client.generate_text("System", "User")
 
     err_msg = str(exc_info.value)
-    assert "models/gemini-3.6-flash is not found" in err_msg
+    assert "models/gemini-3.1-flash-lite is not found" in err_msg
     assert "HTTP 404" in err_msg
     assert "code: 404" in err_msg
     assert "status: NOT_FOUND" in err_msg

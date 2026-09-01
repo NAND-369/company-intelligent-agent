@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
-    llm_model: str = Field(default="gemini-3.6-flash", alias="LLM_MODEL")
+    llm_model: str = Field(default="gemini-3.1-flash-lite", alias="LLM_MODEL")
     rubric_path: str = Field(default="config/rubric.yaml", alias="RUBRIC_PATH")
     llm_timeout_seconds: float = Field(default=30.0, alias="LLM_TIMEOUT_SECONDS")
     llm_max_retries: int = Field(default=2, alias="LLM_MAX_RETRIES")
