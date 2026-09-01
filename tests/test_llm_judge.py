@@ -333,6 +333,7 @@ async def test_gemini_client_header_auth_and_url_safety(monkeypatch: pytest.Monk
         captured_request["url"] = str(url)
         captured_request["headers"] = headers or {}
         captured_request["params"] = params
+        captured_request["json"] = json
         return httpx.Response(
             status_code=200,
             json={"candidates": [{"content": {"parts": [{"text": '{"fit": "YES"}'}]}}]},
@@ -341,17 +342,19 @@ async def test_gemini_client_header_auth_and_url_safety(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
 
-    client = GeminiLLMClient(api_key=secret_key, model="gemini-2.5-flash")
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.6-flash")
     await client.generate_text("System", "User")
 
     assert captured_request["headers"].get("x-goog-api-key") == secret_key
     assert captured_request["params"] is None
     assert secret_key not in captured_request["url"]
+    assert "/models/gemini-3.6-flash:generateContent" in captured_request["url"]
+    assert captured_request["json"]["generationConfig"] == {"response_mime_type": "application/json"}
 
 
 @pytest.mark.asyncio
 async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify GeminiLLMClient extracts structured Google 404 error details without leaking secrets."""
+    """Verify GeminiLLMClient extracts structured Google error details without leaking secrets."""
     import httpx
     from app.llm.client import GeminiLLMClient, LLMClientError
 
@@ -363,7 +366,7 @@ async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.Mon
             json={
                 "error": {
                     "code": 404,
-                    "message": "models/gemini-2.5-flash is not found for API version v1beta",
+                    "message": "models/gemini-3.6-flash is not found for API version v1beta",
                     "status": "NOT_FOUND",
                 }
             },
@@ -372,12 +375,12 @@ async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_404)
 
-    client = GeminiLLMClient(api_key=secret_key, model="gemini-2.5-flash")
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-3.6-flash")
     with pytest.raises(LLMClientError) as exc_info:
         await client.generate_text("System", "User")
 
     err_msg = str(exc_info.value)
-    assert "models/gemini-2.5-flash is not found" in err_msg
+    assert "models/gemini-3.6-flash is not found" in err_msg
     assert "HTTP 404" in err_msg
     assert "code: 404" in err_msg
     assert "status: NOT_FOUND" in err_msg

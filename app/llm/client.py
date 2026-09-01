@@ -99,7 +99,7 @@ class GeminiLLMClient(LLMClient):
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3.6-flash",
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
     ) -> None:
@@ -115,7 +115,6 @@ class GeminiLLMClient(LLMClient):
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt}]}],
             "generationConfig": {
-                "temperature": 0.0,
                 "response_mime_type": "application/json",
             },
         }
