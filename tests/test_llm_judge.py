@@ -318,3 +318,67 @@ async def test_llm_judge_provider_outage_fallback(db_session: AsyncSession) -> N
     assert verdict.fit == FitDecision.UNCERTAIN
     assert verdict.confidence == 0.0
     assert "HTTP 503" in verdict.reasoning[0]
+
+
+@pytest.mark.asyncio
+async def test_gemini_client_header_auth_and_url_safety(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify GeminiLLMClient sends API key via x-goog-api-key header and never in URL query params."""
+    import httpx
+    from app.llm.client import GeminiLLMClient
+
+    captured_request: dict = {}
+    secret_key = "AIzaSySecretTestKey123456"
+
+    async def mock_post(self, url, headers=None, params=None, json=None):
+        captured_request["url"] = str(url)
+        captured_request["headers"] = headers or {}
+        captured_request["params"] = params
+        return httpx.Response(
+            status_code=200,
+            json={"candidates": [{"content": {"parts": [{"text": '{"fit": "YES"}'}]}}]},
+            request=httpx.Request("POST", str(url)),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-2.5-flash")
+    await client.generate_text("System", "User")
+
+    assert captured_request["headers"].get("x-goog-api-key") == secret_key
+    assert captured_request["params"] is None
+    assert secret_key not in captured_request["url"]
+
+
+@pytest.mark.asyncio
+async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify GeminiLLMClient extracts structured Google 404 error details without leaking secrets."""
+    import httpx
+    from app.llm.client import GeminiLLMClient, LLMClientError
+
+    secret_key = "AIzaSySecretTestKey123456"
+
+    async def mock_post_404(self, url, headers=None, params=None, json=None):
+        return httpx.Response(
+            status_code=404,
+            json={
+                "error": {
+                    "code": 404,
+                    "message": "models/gemini-2.5-flash is not found for API version v1beta",
+                    "status": "NOT_FOUND",
+                }
+            },
+            request=httpx.Request("POST", str(url)),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_404)
+
+    client = GeminiLLMClient(api_key=secret_key, model="gemini-2.5-flash")
+    with pytest.raises(LLMClientError) as exc_info:
+        await client.generate_text("System", "User")
+
+    err_msg = str(exc_info.value)
+    assert "models/gemini-2.5-flash is not found" in err_msg
+    assert "HTTP 404" in err_msg
+    assert "code: 404" in err_msg
+    assert "status: NOT_FOUND" in err_msg
+    assert secret_key not in err_msg

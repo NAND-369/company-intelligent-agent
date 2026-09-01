@@ -119,13 +119,15 @@ class GeminiLLMClient(LLMClient):
                 "response_mime_type": "application/json",
             },
         }
-        headers = {"Content-Type": "application/json"}
-        params = {"key": self.api_key}
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": self.api_key,
+        }
 
         return await _execute_with_retry(
             url=self.base_url,
             headers=headers,
-            params=params,
+            params=None,
             json_body=payload,
             timeout=self.timeout_seconds,
             max_retries=self.max_retries,
@@ -230,7 +232,7 @@ async def _execute_with_retry(
     response_extractor: Any,
     provider_name: str,
 ) -> str:
-    """Execute HTTP POST request with bounded exponential backoff on 429 and 503 errors."""
+    """Execute HTTP POST request with structured error handling and bounded backoff."""
     attempt = 0
     base_delay = 1.0
 
@@ -239,32 +241,64 @@ async def _execute_with_retry(
             try:
                 response = await client.post(url, headers=headers, params=params, json=json_body)
 
-                if response.status_code in (401, 403):
-                    raise LLMAuthError(f"{provider_name} authentication failed (HTTP {response.status_code}). Check API key.")
+                if response.status_code >= 400:
+                    error_details: list[str] = []
+                    try:
+                        err_json = response.json()
+                        err_obj = err_json.get("error", {})
+                        if isinstance(err_obj, dict):
+                            if "code" in err_obj:
+                                error_details.append(f"code: {err_obj['code']}")
+                            if "status" in err_obj:
+                                error_details.append(f"status: {err_obj['status']}")
+                            if "message" in err_obj:
+                                error_details.append(f"message: {err_obj['message']}")
+                        elif isinstance(err_obj, str):
+                            error_details.append(f"message: {err_obj}")
+                    except Exception:
+                        error_details.append(response.text[:200].strip())
 
-                if response.status_code == 429:
-                    attempt += 1
-                    if attempt > max_retries:
-                        raise LLMRateLimitError(f"{provider_name} rate limited after {max_retries} retries.")
-                    delay = base_delay * (2 ** (attempt - 1))
-                    logger.warning("%s 429 rate limit. Backing off for %.1fs (attempt %d/%d)", provider_name, delay, attempt, max_retries)
-                    await asyncio.sleep(delay)
-                    continue
+                    details_str = " | ".join(error_details) if error_details else "No error details returned"
+                    clean_err_msg = f"{provider_name} request failed (HTTP {response.status_code}): {details_str}"
 
-                if response.status_code in (500, 502, 503, 504):
-                    attempt += 1
-                    if attempt > max_retries:
-                        raise LLMClientError(f"{provider_name} server error {response.status_code} after {max_retries} retries.")
-                    delay = base_delay * (2 ** (attempt - 1))
-                    logger.warning("%s server error %d. Retrying in %.1fs...", provider_name, response.status_code, delay)
-                    await asyncio.sleep(delay)
-                    continue
+                    if response.status_code in (401, 403):
+                        raise LLMAuthError(f"{provider_name} authentication failed (HTTP {response.status_code}): {details_str}")
 
-                response.raise_for_status()
+                    if response.status_code == 429:
+                        attempt += 1
+                        if attempt > max_retries:
+                            raise LLMRateLimitError(f"{provider_name} rate limited after {max_retries} retries: {details_str}")
+                        delay = base_delay * (2 ** (attempt - 1))
+                        logger.warning(
+                            "%s 429 rate limit. Backing off for %.1fs (attempt %d/%d)",
+                            provider_name,
+                            delay,
+                            attempt,
+                            max_retries,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    if response.status_code in (500, 502, 503, 504):
+                        attempt += 1
+                        if attempt > max_retries:
+                            raise LLMClientError(f"{provider_name} server error {response.status_code} after {max_retries} retries: {details_str}")
+                        delay = base_delay * (2 ** (attempt - 1))
+                        logger.warning(
+                            "%s server error %d. Retrying in %.1fs...",
+                            provider_name,
+                            response.status_code,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    raise LLMClientError(clean_err_msg)
+
                 data = response.json()
                 return str(response_extractor(data))
 
-            except (LLMAuthError, LLMRateLimitError):
+            except (LLMAuthError, LLMRateLimitError, LLMClientError):
                 raise
             except httpx.TimeoutException as exc:
                 attempt += 1
@@ -273,7 +307,7 @@ async def _execute_with_retry(
                 await asyncio.sleep(base_delay)
             except Exception as exc:
                 if attempt >= max_retries:
-                    raise LLMClientError(f"{provider_name} request failed: {exc!s}") from exc
+                    raise LLMClientError(f"{provider_name} request failed: {type(exc).__name__}: {exc!s}") from exc
                 attempt += 1
                 await asyncio.sleep(base_delay)
 
