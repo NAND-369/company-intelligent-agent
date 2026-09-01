@@ -406,29 +406,30 @@ async def test_orchestrator_unhandled_exception_marks_run_failed(db_session: Asy
     )
     await db_session.commit()
 
-    # 2. Construct orchestrator and simulate a broken component that raises an unhandled error
+    # 2. Construct orchestrator and simulate a broken candidate query that raises a top-level error
     orchestrator = PipelineOrchestrator(session=db_session)
 
-    # Mock processor to raise an unexpected runtime error
-    async def broken_process(*args, **kwargs):
-        raise RuntimeError("Unexpected infrastructure failure during pipeline run")
+    orig_execute = db_session.execute
+    failed_once = False
 
-    orchestrator.processor.process_company = broken_process
+    async def broken_execute(stmt, *args, **kwargs):
+        nonlocal failed_once
+        stmt_str = str(stmt)
+        if not failed_once and "FROM companies" in stmt_str:
+            failed_once = True
+            raise RuntimeError("Unexpected infrastructure failure during pipeline run")
+        return await orig_execute(stmt, *args, **kwargs)
 
-    # Seed a candidate company
-    await CompanyRepository.create(
-        session=db_session,
-        name="Broken Co",
-        website_url="https://broken-test.io",
-        sheet_row_id="broken_row_1",
-    )
-    await db_session.commit()
+    db_session.execute = broken_execute
 
-    # 3. Running pipeline must catch or propagate and mark the run FAILED in DB
-    with pytest.raises(RuntimeError):
-        await orchestrator.run_pipeline(
-            PipelineRunRequest(run_id=run.id, skip_ingestion=True)
-        )
+    # 3. Running pipeline must propagate error and mark the run FAILED in DB
+    try:
+        with pytest.raises(RuntimeError):
+            await orchestrator.run_pipeline(
+                PipelineRunRequest(run_id=run.id, skip_ingestion=True)
+            )
+    finally:
+        db_session.execute = orig_execute
 
     # 4. Verify DB record was transitioned to FAILED
     updated_run = await PipelineRunRepository.get_by_id(db_session, run.id)
@@ -436,3 +437,132 @@ async def test_orchestrator_unhandled_exception_marks_run_failed(db_session: Asy
     assert updated_run.status == PipelineRunStatus.FAILED
     assert updated_run.error_summary is not None
     assert "fatal_error" in updated_run.error_summary
+
+
+@pytest.mark.asyncio
+async def test_pipeline_six_companies_batch_resilience(db_session: AsyncSession) -> None:
+    """
+    Test a batch of 6 companies in a single run:
+    - Company 1: Success + Sync success
+    - Company 2: Processor raises unexpected error (failure isolation)
+    - Company 3: Success + Sync raises unexpected error (sync failure isolation)
+    - Company 4: Success
+    - Company 5: Success
+    - Company 6: Success
+    Verifies all 6 companies are processed, processed_count == 6, and leases are released.
+    """
+    # 1. Create 6 companies in PENDING state
+    created_companies = []
+    for i in range(1, 7):
+        co = await CompanyRepository.create(
+            session=db_session,
+            name=f"Batch Company {i}",
+            website_url=f"https://company{i}.com",
+            sheet_row_id=f"row_{i}",
+            status=CompanyStatus.PENDING,
+        )
+        created_companies.append(co)
+    await db_session.commit()
+
+    # 2. Setup Orchestrator with mock components
+    orchestrator = PipelineOrchestrator(session=db_session)
+    orchestrator.processor.enable_browser = False
+
+    # Custom processor that fails specifically on company 2
+    orig_process = orchestrator.processor.process_company
+    async def resilient_process(company: Company):
+        if company.name == "Batch Company 2":
+            raise ValueError("Simulated network crash during company 2 extraction")
+        return await orig_process(company)
+
+    orchestrator.processor.process_company = resilient_process
+
+    # Custom sync service that fails specifically on company 3
+    orig_sync = orchestrator.sync_service.sync_company
+    async def resilient_sync(company_id, dry_run=False):
+        co = await CompanyRepository.get_by_id(db_session, company_id)
+        if co and co.name == "Batch Company 3":
+            raise RuntimeError("Google Sheets API 500 quota outage during company 3 sync")
+        return await orig_sync(company_id, dry_run=dry_run)
+
+    orchestrator.sync_service.sync_company = resilient_sync
+
+    # Mock the HTTP enrichment and LLM judge for companies 1, 3, 4, 5, 6
+    orchestrator.processor.http_enrichment_service = HttpEnrichmentService(
+        session=db_session,
+        website_enricher=WebsiteEnricher(http_client=MockHttpClient(REALISTIC_HTML_FIXTURE)),
+    )
+    orchestrator.processor.llm_judge_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(),
+    )
+    from tests.test_sheets_sync import MockGoogleSheetsSyncClient
+    orchestrator.sync_service.client = MockGoogleSheetsSyncClient()
+
+    # 3. Execute the pipeline with sync_to_sheets=True
+    run_req = PipelineRunRequest(skip_ingestion=True, sync_to_sheets=True)
+    res = await orchestrator.run_pipeline(run_req)
+
+    # 4. Assertions: all 6 companies were processed!
+    assert res.companies_discovered == 6
+    assert res.companies_processed == 6
+    assert res.companies_succeeded == 5
+    assert res.companies_failed == 1
+    assert res.status == PipelineRunStatus.PARTIAL_FAILURE
+
+    # Verify all leases were cleared
+    for co in created_companies:
+        fresh = await CompanyRepository.get_by_id(db_session, co.id)
+        assert fresh is not None
+        assert fresh.lease_expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_company_processor_browser_timeout_fallback(db_session: AsyncSession) -> None:
+    """
+    Test that when browser enrichment hangs/times out, CompanyProcessor:
+    1. Times out bounded by browser_timeout_seconds.
+    2. Falls back gracefully to static HTTP signals.
+    3. Successfully completes LLM Judge evaluation.
+    4. Does not crash or leave the pipeline hanging.
+    """
+    # 1. Create a company
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Slow Browser Corp",
+        website_url="https://slowbrowser.io",
+        sheet_row_id="row_slow_browser",
+        status=CompanyStatus.PENDING,
+    )
+    await db_session.commit()
+
+    # 2. Setup CompanyProcessor with a small timeout (0.05s) and hanging browser mock
+    processor = CompanyProcessor(
+        session=db_session,
+        enable_browser=True,
+        browser_timeout_seconds=0.05,
+    )
+
+    processor.http_enrichment_service = HttpEnrichmentService(
+        session=db_session,
+        website_enricher=WebsiteEnricher(http_client=MockHttpClient(REALISTIC_HTML_FIXTURE)),
+    )
+
+    # Simulate a hanging browser enrichment call
+    async def hanging_browser_enrich(company_id, fetch_careers_page=True):
+        await asyncio.sleep(5.0)
+
+    processor.http_enrichment_service.enrich_company_with_browser = hanging_browser_enrich
+
+    processor.llm_judge_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(),
+    )
+
+    # 3. Process company
+    result = await processor.process_company(company)
+
+    # 4. Assertions: completed via fallback to HTTP signals!
+    assert result.status == CompanyStatus.JUDGED
+    assert result.fit_decision is not None
+    assert result.error is None

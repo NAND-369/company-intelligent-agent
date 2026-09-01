@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     pipeline_max_concurrency: int = Field(default=3, alias="PIPELINE_MAX_CONCURRENCY")
     pipeline_lease_duration_minutes: int = Field(default=5, alias="PIPELINE_LEASE_DURATION_MINUTES")
     pipeline_enable_browser: bool = Field(default=True, alias="PIPELINE_ENABLE_BROWSER")
+    pipeline_browser_timeout_seconds: float = Field(default=30.0, alias="PIPELINE_BROWSER_TIMEOUT_SECONDS")
 
     # In-Process Scheduler Configuration
     scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")

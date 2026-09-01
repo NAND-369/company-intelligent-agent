@@ -50,6 +50,8 @@ class PipelineOrchestrator:
         self.processor = processor or CompanyProcessor(
             session=session,
             enable_browser=self.settings.pipeline_enable_browser,
+            browser_timeout_seconds=self.settings.pipeline_browser_timeout_seconds,
+            settings=self.settings,
         )
         self.sync_service = sync_service or SheetsSyncService(
             session=session,
@@ -78,36 +80,36 @@ class PipelineOrchestrator:
             req.trigger_type,
         )
 
-        # 1. Initialize or attach PipelineRun record in PostgreSQL if not dry run
-        if not req.dry_run:
-            if req.run_id:
-                persisted_run = await PipelineRunRepository.get_by_id(self.session, req.run_id)
-                if not persisted_run:
+        try:
+            # 1. Initialize or attach PipelineRun record in PostgreSQL if not dry run
+            if not req.dry_run:
+                if req.run_id:
+                    persisted_run = await PipelineRunRepository.get_by_id(self.session, req.run_id)
+                    if not persisted_run:
+                        persisted_run = await PipelineRunRepository.create(
+                            session=self.session,
+                            trigger_type=req.trigger_type,
+                            status=PipelineRunStatus.RUNNING,
+                        )
+                        run_id = persisted_run.id
+                    else:
+                        run_id = persisted_run.id
+                else:
                     persisted_run = await PipelineRunRepository.create(
                         session=self.session,
                         trigger_type=req.trigger_type,
                         status=PipelineRunStatus.RUNNING,
                     )
                     run_id = persisted_run.id
-                else:
-                    run_id = persisted_run.id
-            else:
-                persisted_run = await PipelineRunRepository.create(
-                    session=self.session,
-                    trigger_type=req.trigger_type,
-                    status=PipelineRunStatus.RUNNING,
-                )
-                run_id = persisted_run.id
-            await self.session.commit()
+                await self.session.commit()
 
-        result = PipelineRunResult(
-            run_id=run_id,
-            status=PipelineRunStatus.RUNNING,
-            trigger_type=req.trigger_type,
-            dry_run=req.dry_run,
-        )
+            result = PipelineRunResult(
+                run_id=run_id,
+                status=PipelineRunStatus.RUNNING,
+                trigger_type=req.trigger_type,
+                dry_run=req.dry_run,
+            )
 
-        try:
             # 2. Stage 1: Google Sheets Ingestion (unless skipped)
             if not req.skip_ingestion:
                 try:
@@ -155,61 +157,93 @@ class PipelineOrchestrator:
 
             for company in candidates:
                 async with semaphore:
-                    has_lease = await CompanyRepository.acquire_lease(
-                        session=self.session,
-                        company_id=company.id,
-                        lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
-                    )
-                    await self.session.commit()
+                    try:
+                        has_lease = await CompanyRepository.acquire_lease(
+                            session=self.session,
+                            company_id=company.id,
+                            lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
+                        )
+                        await self.session.commit()
 
-                    if not has_lease and company.status != CompanyStatus.PROCESSING:
-                        logger.info("Company '%s' is leased by another worker. Skipping.", company.name)
-                        continue
+                        if not has_lease and company.status != CompanyStatus.PROCESSING:
+                            logger.info("Company '%s' is leased by another worker. Skipping.", company.name)
+                            continue
 
-                    co_result = await self.processor.process_company(company)
-                    result.company_results.append(co_result)
-                    result.companies_processed += 1
+                        co_result = await self.processor.process_company(company)
+                        result.company_results.append(co_result)
+                        result.companies_processed += 1
 
-                    if co_result.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED):
-                        result.companies_succeeded += 1
-                        if co_result.fit_decision == FitDecision.YES:
-                            result.fit_yes_count += 1
-                        elif co_result.fit_decision == FitDecision.NO:
-                            result.fit_no_count += 1
-                        elif co_result.fit_decision == FitDecision.UNCERTAIN:
-                            result.fit_uncertain_count += 1
+                        if co_result.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED):
+                            result.companies_succeeded += 1
+                            if co_result.fit_decision == FitDecision.YES:
+                                result.fit_yes_count += 1
+                            elif co_result.fit_decision == FitDecision.NO:
+                                result.fit_no_count += 1
+                            elif co_result.fit_decision == FitDecision.UNCERTAIN:
+                                result.fit_uncertain_count += 1
 
-                        # Stage 4 (Optional): Synchronize verdict back to Google Sheets row
-                        if req.sync_to_sheets:
-                            logger.info("Synchronizing verdict for '%s' to Google Sheets...", company.name)
-                            sync_res = await self.sync_service.sync_company(
-                                company_id=company.id,
-                                dry_run=req.dry_run,
-                            )
-                            if sync_res.status == SyncOutcome.SUCCESS:
-                                co_result.is_synced = True
-                                co_result.status = CompanyStatus.SYNCED
-                                result.synced_count += 1
-                            elif sync_res.error_details:
-                                result.errors.append(f"Sync error for {company.name}: {sync_res.error_details}")
-                    else:
+                            # Stage 4 (Optional): Synchronize verdict back to Google Sheets row
+                            if req.sync_to_sheets:
+                                try:
+                                    logger.info("Synchronizing verdict for '%s' to Google Sheets...", company.name)
+                                    sync_res = await self.sync_service.sync_company(
+                                        company_id=company.id,
+                                        dry_run=req.dry_run,
+                                    )
+                                    if sync_res.status == SyncOutcome.SUCCESS:
+                                        co_result.is_synced = True
+                                        co_result.status = CompanyStatus.SYNCED
+                                        result.synced_count += 1
+                                    elif sync_res.error_details:
+                                        result.errors.append(f"Sync error for {company.name}: {sync_res.error_details}")
+                                except Exception as sync_exc:
+                                    msg = f"Unexpected sync error for {company.name}: {sync_exc!s}"
+                                    logger.error(msg)
+                                    result.errors.append(msg)
+                        else:
+                            result.companies_failed += 1
+                            if co_result.error:
+                                result.errors.append(f"Company {company.name}: {co_result.error}")
+
+                    except Exception as loop_co_exc:
+                        logger.exception("Unexpected error processing company '%s': %s", company.name, loop_co_exc)
                         result.companies_failed += 1
-                        if co_result.error:
-                            result.errors.append(f"Company {company.name}: {co_result.error}")
+                        result.companies_processed += 1
+                        result.errors.append(f"Company {company.name} unhandled error: {loop_co_exc!s}")
+                        try:
+                            await self.session.rollback()
+                            await CompanyRepository.update_status(
+                                session=self.session,
+                                company_id=company.id,
+                                status=CompanyStatus.FAILED,
+                            )
+                            await self.session.commit()
+                        except Exception as db_err:
+                            logger.error("Failed to mark company %s as FAILED: %s", company.name, db_err)
+                    finally:
+                        # Release company lease lock
+                        try:
+                            await CompanyRepository.release_lease(self.session, company.id)
+                            await self.session.commit()
+                        except Exception as rel_err:
+                            logger.debug("Error releasing lease for %s: %s", company.name, rel_err)
 
-                    # Update running counters in database
-                    await PipelineRunRepository.update_counters(
-                        session=self.session,
-                        run_id=run_id,
-                        total_companies=result.companies_discovered,
-                        processed_count=result.companies_processed,
-                        success_count=result.companies_succeeded,
-                        synced_count=result.synced_count,
-                        fit_yes_count=result.fit_yes_count,
-                        fit_no_count=result.fit_no_count,
-                        fit_uncertain_count=result.fit_uncertain_count,
-                    )
-                    await self.session.commit()
+                        # Update running counters in database
+                        try:
+                            await PipelineRunRepository.update_counters(
+                                session=self.session,
+                                run_id=run_id,
+                                total_companies=result.companies_discovered,
+                                processed_count=result.companies_processed,
+                                success_count=result.companies_succeeded,
+                                synced_count=result.synced_count,
+                                fit_yes_count=result.fit_yes_count,
+                                fit_no_count=result.fit_no_count,
+                                fit_uncertain_count=result.fit_uncertain_count,
+                            )
+                            await self.session.commit()
+                        except Exception as counter_err:
+                            logger.error("Error updating pipeline run counters: %s", counter_err)
 
             # 6. Stage 5: Finalize PipelineRun status and metrics
             duration = round(time.monotonic() - start_time, 2)
@@ -249,6 +283,7 @@ class PipelineOrchestrator:
             logger.exception("Pipeline run %s encountered unhandled exception: %s", run_id, exc)
             if not req.dry_run:
                 try:
+                    await self.session.rollback()
                     await PipelineRunRepository.complete_run(
                         session=self.session,
                         run_id=run_id,

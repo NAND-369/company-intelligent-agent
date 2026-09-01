@@ -140,12 +140,25 @@ class CompanyRepository:
         if not company:
             return False
 
-        # Allow lease if pending or expired
-        if company.status == CompanyStatus.PENDING or (
+        # Allow lease if pending, enriched, failed, or expired
+        if company.status in (CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.FAILED) or (
             company.lease_expires_at and company.lease_expires_at < now
-        ) or company.status == CompanyStatus.FAILED:
+        ):
             company.status = CompanyStatus.PROCESSING
             company.lease_expires_at = now + timedelta(minutes=lease_duration_minutes)
+            await session.flush()
+            return True
+        return False
+
+    @staticmethod
+    async def release_lease(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+    ) -> bool:
+        """Clear the processing lease lock on a company."""
+        company = await CompanyRepository.get_by_id(session, company_id)
+        if company:
+            company.lease_expires_at = None
             await session.flush()
             return True
         return False

@@ -1,10 +1,12 @@
 """Company processor handling state transitions, enrichment, and LLM evaluation for a single company."""
 
+import asyncio
 import logging
 import time
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import Settings, get_settings
 from app.database.enums import CompanyStatus, SignalType
 from app.database.models import Company, Verdict
 from app.database.repositories import (
@@ -28,11 +30,19 @@ class CompanyProcessor:
         http_enrichment_service: Optional[HttpEnrichmentService] = None,
         llm_judge_service: Optional[LLMJudgeService] = None,
         enable_browser: bool = True,
+        browser_timeout_seconds: Optional[float] = None,
+        settings: Optional[Settings] = None,
     ) -> None:
         self.session = session
+        self.settings = settings or get_settings()
         self.http_enrichment_service = http_enrichment_service or HttpEnrichmentService(session=session)
         self.llm_judge_service = llm_judge_service or LLMJudgeService(session=session)
         self.enable_browser = enable_browser
+        self.browser_timeout_seconds = (
+            browser_timeout_seconds
+            if browser_timeout_seconds is not None
+            else self.settings.pipeline_browser_timeout_seconds
+        )
 
     async def process_company(self, company: Company) -> PipelineCompanyResult:
         """
@@ -73,10 +83,30 @@ class CompanyProcessor:
                 logger.info("Executing HTTP enrichment for '%s'", company.name)
                 await self.http_enrichment_service.enrich_company(company.id)
 
-            # Step B: Browser careers enrichment
+            # Step B: Browser careers enrichment with bounded timeout
             if self.enable_browser and not has_browser_signal:
-                logger.info("Executing Browser enrichment for '%s'", company.name)
-                await self.http_enrichment_service.enrich_company_with_browser(company.id)
+                logger.info(
+                    "Executing Browser enrichment for '%s' (timeout=%.1fs)",
+                    company.name,
+                    self.browser_timeout_seconds,
+                )
+                try:
+                    await asyncio.wait_for(
+                        self.http_enrichment_service.enrich_company_with_browser(company.id),
+                        timeout=self.browser_timeout_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Browser enrichment timed out after %.1fs for '%s' (continuing with static signals)",
+                        self.browser_timeout_seconds,
+                        company.name,
+                    )
+                except Exception as b_exc:
+                    logger.warning(
+                        "Browser enrichment failed for '%s' (continuing with static signals): %s",
+                        company.name,
+                        b_exc,
+                    )
 
             # Step C: LLM Judge evaluation
             logger.info("Executing LLM evaluation for '%s'", company.name)
@@ -105,12 +135,16 @@ class CompanyProcessor:
         except Exception as exc:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.error("Error processing company '%s' (id=%s): %s", company.name, company.id, exc)
-            await CompanyRepository.update_status(
-                session=self.session,
-                company_id=company.id,
-                status=CompanyStatus.FAILED,
-            )
-            await self.session.commit()
+            try:
+                await self.session.rollback()
+                await CompanyRepository.update_status(
+                    session=self.session,
+                    company_id=company.id,
+                    status=CompanyStatus.FAILED,
+                )
+                await self.session.commit()
+            except Exception as db_err:
+                logger.error("Failed to mark company %s as FAILED on error: %s", company.name, db_err)
 
             return PipelineCompanyResult(
                 company_id=company.id,

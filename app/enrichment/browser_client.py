@@ -76,7 +76,6 @@ class PlaywrightBrowserClient:
                         "--disable-gpu",
                         "--no-first-run",
                         "--no-zygote",
-                        "--single-process",
                     ],
                 )
                 logger.info("Playwright Chromium browser launched successfully.")
