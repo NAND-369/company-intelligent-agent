@@ -286,9 +286,16 @@ async def test_ingestion_service_missing_spreadsheet_id(db_session: AsyncSession
 # 3. Client Authentication Unit Tests
 # ==============================================================================
 
-def test_google_sheets_client_missing_credentials() -> None:
+def test_google_sheets_client_missing_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that GoogleSheetsClient raises GoogleSheetsAuthError when no credentials are configured."""
     from app.config.settings import Settings
+    import google.auth
+
+    # Mock google.auth.default to raise DefaultCredentialsError so ADC doesn't pick up local machine creds
+    def mock_default(*args, **kwargs):
+        raise google.auth.exceptions.DefaultCredentialsError("No ADC configured")
+
+    monkeypatch.setattr(google.auth, "default", mock_default)
 
     empty_settings = Settings(
         GOOGLE_SERVICE_ACCOUNT_INFO=None,
@@ -300,3 +307,30 @@ def test_google_sheets_client_missing_credentials() -> None:
         client._authenticate()
 
     assert "No Google credentials provided" in str(exc_info.value)
+
+
+def test_google_sheets_client_authorized_user_oauth2_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that GoogleSheetsClient can authenticate using OAuth2 authorized user JSON."""
+    import json
+    import gspread
+    from app.config.settings import Settings
+
+    authorized_user_dict = {
+        "type": "authorized_user",
+        "client_id": "test-client-id.apps.googleusercontent.com",
+        "client_secret": "test-client-secret",
+        "refresh_token": "test-refresh-token",
+    }
+
+    class FakeGspreadClient:
+        pass
+
+    monkeypatch.setattr(gspread, "authorize", lambda creds: FakeGspreadClient())
+
+    settings = Settings(
+        GOOGLE_SERVICE_ACCOUNT_INFO=json.dumps(authorized_user_dict),
+    )
+    client = GoogleSheetsClient(settings=settings)
+    authed_client = client._authenticate()
+    assert isinstance(authed_client, FakeGspreadClient)
+

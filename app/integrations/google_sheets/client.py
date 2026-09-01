@@ -1,11 +1,11 @@
-"""Google Sheets API client and authentication provider with reading and writing capabilities."""
-
 import json
 import logging
 import time
 from typing import Any, Optional, Protocol
+import google.auth
+from google.oauth2.credentials import Credentials as UserCredentials
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 import gspread
-from google.oauth2.service_account import Credentials
 
 from app.config.settings import Settings, get_settings
 
@@ -19,7 +19,7 @@ class GoogleSheetsError(Exception):
 
 
 class GoogleSheetsAuthError(GoogleSheetsError):
-    """Raised when Google Service Account credentials cannot be loaded or authenticated."""
+    """Raised when Google Service Account or OAuth credentials cannot be loaded or authenticated."""
 
     pass
 
@@ -76,7 +76,7 @@ class GoogleSheetsClientProtocol(Protocol):
 
 
 class GoogleSheetsClient:
-    """Production Google Sheets API client using Service Account credentials with retry capability."""
+    """Production Google Sheets API client supporting Service Accounts, OAuth2 User Tokens, and ADC with retry capability."""
 
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -93,26 +93,44 @@ class GoogleSheetsClient:
             return self._client
 
         try:
-            # Option A: In-memory JSON string (ideal for container/cloud secrets)
+            # Option A: In-memory JSON string (Service Account or Authorized User OAuth2 JSON)
             if self.settings.google_service_account_info:
                 info_dict = json.loads(self.settings.google_service_account_info)
-                credentials = Credentials.from_service_account_info(
-                    info_dict, scopes=self.SCOPES
-                )
+                if info_dict.get("type") == "authorized_user" or "refresh_token" in info_dict:
+                    credentials = UserCredentials.from_authorized_user_info(
+                        info_dict, scopes=self.SCOPES
+                    )
+                else:
+                    credentials = ServiceAccountCredentials.from_service_account_info(
+                        info_dict, scopes=self.SCOPES
+                    )
                 self._client = gspread.authorize(credentials)
                 return self._client
 
-            # Option B: File path to service account key
+            # Option B: File path to credentials file
             if self.settings.google_service_account_file:
-                credentials = Credentials.from_service_account_file(
-                    self.settings.google_service_account_file, scopes=self.SCOPES
-                )
+                try:
+                    credentials = ServiceAccountCredentials.from_service_account_file(
+                        self.settings.google_service_account_file, scopes=self.SCOPES
+                    )
+                except Exception:
+                    credentials = UserCredentials.from_authorized_user_file(
+                        self.settings.google_service_account_file, scopes=self.SCOPES
+                    )
                 self._client = gspread.authorize(credentials)
                 return self._client
+
+            # Option C: Google Application Default Credentials (ADC fallback)
+            try:
+                credentials, _ = google.auth.default(scopes=self.SCOPES)
+                self._client = gspread.authorize(credentials)
+                return self._client
+            except Exception:
+                pass
 
             raise GoogleSheetsAuthError(
-                "No Google credentials provided. Set GOOGLE_SERVICE_ACCOUNT_INFO "
-                "or GOOGLE_SERVICE_ACCOUNT_FILE."
+                "No Google credentials provided. Set GOOGLE_SERVICE_ACCOUNT_INFO, "
+                "GOOGLE_SERVICE_ACCOUNT_FILE, or configure Application Default Credentials."
             )
         except GoogleSheetsAuthError:
             raise

@@ -38,6 +38,10 @@ credentials.json
 *credential*.json
 keys/
 secrets/
+client_secret.json
+client_secret*.json
+generate_oauth.py
+*token*.json
 
 # IDEs
 .idea/
