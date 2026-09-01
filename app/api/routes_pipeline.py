@@ -40,6 +40,7 @@ async def _run_pipeline_background(
         async with session_module.async_session_factory() as session:
             orchestrator = PipelineOrchestrator(session=session)
             pipeline_request = PipelineRunRequest(
+                run_id=run_id,
                 limit=req.effective_batch_size,
                 dry_run=req.dry_run,
                 skip_ingestion=req.skip_ingestion,
@@ -49,14 +50,17 @@ async def _run_pipeline_background(
             await orchestrator.run_pipeline(pipeline_request)
     except Exception as exc:
         logger.exception("Fatal error executing background pipeline run %s: %s", run_id, exc)
-        async with session_module.async_session_factory() as session:
-            await PipelineRunRepository.complete_run(
-                session=session,
-                run_id=run_id,
-                status=PipelineRunStatus.FAILED,
-                error_summary={"fatal_error": str(exc)},
-            )
-            await session.commit()
+        try:
+            async with session_module.async_session_factory() as session:
+                await PipelineRunRepository.complete_run(
+                    session=session,
+                    run_id=run_id,
+                    status=PipelineRunStatus.FAILED,
+                    error_summary={"fatal_error": str(exc)},
+                )
+                await session.commit()
+        except Exception as cleanup_exc:
+            logger.exception("Failed to mark background pipeline run %s as FAILED: %s", run_id, cleanup_exc)
 
 
 @router.post(
@@ -72,16 +76,42 @@ async def trigger_run(
     _auth: bool = Depends(require_api_key),
 ) -> TriggerRunResponse:
     """Validate active runs, create RUNNING record, and dispatch background execution."""
-    # 1. Check for active run conflict
-    active_stmt = select(PipelineRun).where(PipelineRun.status == PipelineRunStatus.RUNNING).limit(1)
+    # 1. Check for active run conflict (with automatic stale/orphaned recovery)
+    active_stmt = (
+        select(PipelineRun)
+        .where(PipelineRun.status == PipelineRunStatus.RUNNING)
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )
     active_res = await session.execute(active_stmt)
     active_run = active_res.scalar_one_or_none()
 
     if active_run:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A pipeline run is already in progress with ID '{active_run.id}'.",
-        )
+        now = datetime.now(timezone.utc)
+        started_at = active_run.started_at
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+
+        stale_threshold_seconds = 1800  # 30 minutes
+        if started_at and (now - started_at).total_seconds() > stale_threshold_seconds:
+            logger.warning(
+                "Active run %s started at %s (>%ds ago); recovering orphaned run to FAILED.",
+                active_run.id,
+                started_at,
+                stale_threshold_seconds,
+            )
+            await PipelineRunRepository.complete_run(
+                session=session,
+                run_id=active_run.id,
+                status=PipelineRunStatus.FAILED,
+                error_summary={"stale_recovery": "Run timed out or orphaned by server restart."},
+            )
+            await session.commit()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A pipeline run is already in progress with ID '{active_run.id}'.",
+            )
 
     # 2. Pre-create PipelineRun in database
     run = await PipelineRunRepository.create(
@@ -91,7 +121,7 @@ async def trigger_run(
     )
     await session.commit()
 
-    # 3. Spawn background execution
+    # 3. Spawn background execution with pre-created run_id
     asyncio.create_task(_run_pipeline_background(run.id, config, TriggerType.ON_DEMAND_API))
 
     return TriggerRunResponse(

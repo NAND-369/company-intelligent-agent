@@ -16,6 +16,7 @@ from app.database.enums import (
 class PipelineRunRequest(BaseModel):
     """Payload for triggering an on-demand pipeline execution."""
 
+    run_id: Optional[uuid.UUID] = Field(default=None, description="Optional pre-allocated PipelineRun UUID to reuse")
     limit: Optional[int] = Field(default=None, ge=1, le=500, description="Max companies to process in this run")
     dry_run: bool = Field(default=False, description="Preview actions without mutating database state")
     skip_ingestion: bool = Field(default=False, description="Skip Google Sheets fetch and process existing DB companies")

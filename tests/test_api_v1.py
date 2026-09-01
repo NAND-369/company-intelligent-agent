@@ -1,6 +1,4 @@
-"""Comprehensive test suite for Phase 9 FastAPI REST API endpoints."""
-
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import uuid
 import pytest
 from httpx import AsyncClient
@@ -396,3 +394,98 @@ async def test_create_company_validation_error(
     payload = {"name": "Missing Website Corp"}
     response = await async_client.post("/companies", json=payload, headers=auth_headers)
     assert response.status_code == 422
+
+
+# ==============================================================================
+# 5. Pipeline Run Concurrency & Lifecycle Regression Tests
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_completed_run_does_not_block_subsequent_run(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test that a completed pipeline run does not block subsequent POST /run requests."""
+    # 1. Create previous run in COMPLETED state
+    await PipelineRunRepository.create(
+        session=db_session,
+        trigger_type=TriggerType.ON_DEMAND_API,
+        status=PipelineRunStatus.COMPLETED,
+    )
+    await db_session.commit()
+
+    # 2. Trigger new run via POST /run
+    response = await async_client.post(
+        "/run",
+        json={"skip_ingestion": True, "batch_size": 5},
+        headers=auth_headers,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert "run_id" in data
+    assert data["status"] == "RUNNING"
+
+
+@pytest.mark.asyncio
+async def test_failed_run_does_not_block_subsequent_run(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test that a failed pipeline run does not block subsequent POST /run requests."""
+    # 1. Create previous run in FAILED state
+    await PipelineRunRepository.create(
+        session=db_session,
+        trigger_type=TriggerType.ON_DEMAND_API,
+        status=PipelineRunStatus.FAILED,
+    )
+    await db_session.commit()
+
+    # 2. Trigger new run via POST /run
+    response = await async_client.post(
+        "/run",
+        json={"skip_ingestion": True, "batch_size": 5},
+        headers=auth_headers,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert "run_id" in data
+    assert data["status"] == "RUNNING"
+
+
+@pytest.mark.asyncio
+async def test_stale_orphaned_run_recovers_automatically(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test that an orphaned RUNNING record older than 30 minutes is automatically recovered."""
+    # 1. Create a stale run started 45 minutes ago
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=45)
+    stale_run = PipelineRun(
+        trigger_type=TriggerType.ON_DEMAND_API,
+        status=PipelineRunStatus.RUNNING,
+        started_at=stale_time,
+    )
+    db_session.add(stale_run)
+    await db_session.commit()
+
+    # 2. POST /run should recover the stale run and allow the new run to start
+    response = await async_client.post(
+        "/run",
+        json={"skip_ingestion": True},
+        headers=auth_headers,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert "run_id" in data
+    assert data["status"] == "RUNNING"
+    assert data["run_id"] != str(stale_run.id)
+
+    # 3. Verify stale run was transitioned to FAILED
+    refreshed_stale = await PipelineRunRepository.get_by_id(db_session, stale_run.id)
+    assert refreshed_stale is not None
+    assert refreshed_stale.status == PipelineRunStatus.FAILED
+    assert refreshed_stale.error_summary is not None
+    assert "stale_recovery" in refreshed_stale.error_summary

@@ -350,3 +350,89 @@ async def test_pipeline_manual_api_company_flow_without_google_sheets(
     assert detail["latest_verdict"] is not None
     assert detail["latest_verdict"]["fit"] in ("YES", "NO", "UNCERTAIN")
     assert len(detail["signals"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_reuses_provided_run_id(db_session: AsyncSession) -> None:
+    """
+    Test that when an existing run_id is supplied in PipelineRunRequest,
+    the orchestrator reuses that exact record, updates it to COMPLETED,
+    and does NOT spawn a duplicate or orphaned PipelineRun record.
+    """
+    # 1. Pre-create the PipelineRun record as the API does
+    pre_created_run = await PipelineRunRepository.create(
+        session=db_session,
+        trigger_type=TriggerType.ON_DEMAND_API,
+        status=PipelineRunStatus.RUNNING,
+    )
+    await db_session.commit()
+    target_run_id = pre_created_run.id
+
+    # 2. Execute orchestrator with the pre-created run_id
+    orchestrator = PipelineOrchestrator(session=db_session)
+    result = await orchestrator.run_pipeline(
+        PipelineRunRequest(run_id=target_run_id, skip_ingestion=True)
+    )
+
+    # 3. Assert returned result uses the exact target_run_id
+    assert result.run_id == target_run_id
+    assert result.status == PipelineRunStatus.COMPLETED
+
+    # 4. Verify in database: exactly 1 record exists and its status is COMPLETED
+    persisted = await PipelineRunRepository.get_by_id(db_session, target_run_id)
+    assert persisted is not None
+    assert persisted.status == PipelineRunStatus.COMPLETED
+    assert persisted.completed_at is not None
+
+    # Verify no second record was created
+    all_runs_stmt = select(PipelineRun)
+    all_runs_res = await db_session.execute(all_runs_stmt)
+    all_runs = list(all_runs_res.scalars().all())
+    matching_runs = [r for r in all_runs if r.id == target_run_id]
+    assert len(matching_runs) == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_unhandled_exception_marks_run_failed(db_session: AsyncSession) -> None:
+    """
+    Test that an unexpected exception during pipeline execution transitions
+    the PipelineRun record to FAILED status and records the fatal error.
+    """
+    # 1. Pre-create RUNNING record
+    run = await PipelineRunRepository.create(
+        session=db_session,
+        trigger_type=TriggerType.ON_DEMAND_API,
+        status=PipelineRunStatus.RUNNING,
+    )
+    await db_session.commit()
+
+    # 2. Construct orchestrator and simulate a broken component that raises an unhandled error
+    orchestrator = PipelineOrchestrator(session=db_session)
+
+    # Mock processor to raise an unexpected runtime error
+    async def broken_process(*args, **kwargs):
+        raise RuntimeError("Unexpected infrastructure failure during pipeline run")
+
+    orchestrator.processor.process_company = broken_process
+
+    # Seed a candidate company
+    await CompanyRepository.create(
+        session=db_session,
+        name="Broken Co",
+        website_url="https://broken-test.io",
+        sheet_row_id="broken_row_1",
+    )
+    await db_session.commit()
+
+    # 3. Running pipeline must catch or propagate and mark the run FAILED in DB
+    with pytest.raises(RuntimeError):
+        await orchestrator.run_pipeline(
+            PipelineRunRequest(run_id=run.id, skip_ingestion=True)
+        )
+
+    # 4. Verify DB record was transitioned to FAILED
+    updated_run = await PipelineRunRepository.get_by_id(db_session, run.id)
+    assert updated_run is not None
+    assert updated_run.status == PipelineRunStatus.FAILED
+    assert updated_run.error_summary is not None
+    assert "fatal_error" in updated_run.error_summary
