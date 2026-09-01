@@ -26,15 +26,16 @@ async def test_health_check_no_auth_required(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_root_landing_page_success(async_client: AsyncClient) -> None:
-    """Test that GET / returns 200 OK with the HTML landing page."""
+    """Test that GET / returns 200 OK with the HTML landing page and dashboard."""
     response = await async_client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
     html_text = response.text
     assert "Company Intelligence Agent" in html_text
     assert "COMPANIES IN" in html_text
+    assert "GOOGLE SHEET" in html_text
+    assert "ADD COMPANY" in html_text
+    assert "RUN PIPELINE" in html_text
     assert "THE PIPELINE" in html_text
-    assert "NOT A SUMMARY" in html_text
-    assert "FROM EVIDENCE" in html_text
     assert "/docs" in html_text
     assert "/health" in html_text

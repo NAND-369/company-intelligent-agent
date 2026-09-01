@@ -438,3 +438,33 @@ async def test_api_trigger_pipeline_with_sync_flag(async_client: AsyncClient) ->
     data = response.json()
     assert "run_id" in data
     assert data["status"] == "RUNNING"
+
+
+@pytest.mark.asyncio
+async def test_api_sheets_sync_endpoint(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test on-demand sheets ingestion endpoint POST /sheets/sync."""
+    settings = get_settings()
+    headers = {"X-API-Key": settings.api_key}
+
+    from app.integrations.google_sheets.schemas import IngestionResult
+    from app.integrations.google_sheets.service import CompanyIngestionService
+
+    async def mock_ingest(self):
+        return IngestionResult(
+            spreadsheet_id="test-sheet",
+            worksheet_name="Companies",
+            rows_read=2,
+            companies_created=1,
+            companies_updated=1,
+            rows_skipped=0,
+        )
+
+    monkeypatch.setattr(CompanyIngestionService, "ingest_companies", mock_ingest)
+
+    response = await async_client.post("/sheets/sync", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["rows_read"] == 2
+    assert data["companies_created"] == 1
+    assert data["companies_updated"] == 1

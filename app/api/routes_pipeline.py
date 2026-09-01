@@ -212,3 +212,28 @@ async def get_run_status(
         ),
         errors=error_list,
     )
+
+
+@router.post(
+    "/sheets/sync",
+    summary="Ingest Companies from Google Sheet",
+    description="Trigger an on-demand sync/ingestion of rows from the configured Google Sheet.",
+)
+async def sync_google_sheet(
+    session: AsyncSession = Depends(get_db_session),
+    _auth: bool = Depends(require_api_key),
+) -> dict:
+    """Ingest/update company rows from Google Sheets without running full evaluation."""
+    from app.integrations.google_sheets.service import CompanyIngestionService
+
+    service = CompanyIngestionService(session=session)
+    result = await service.ingest_companies()
+    await session.commit()
+    return {
+        "status": "success",
+        "rows_read": result.rows_read,
+        "companies_created": result.companies_created,
+        "companies_updated": result.companies_updated,
+        "rows_skipped": result.rows_skipped,
+        "errors": result.errors,
+    }
