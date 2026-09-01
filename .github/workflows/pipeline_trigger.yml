@@ -1,0 +1,69 @@
+name: Scheduled Pipeline Trigger
+
+on:
+  schedule:
+    # Runs automatically every day at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      force_reprocess:
+        description: "Force re-process already synced companies"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  trigger:
+    name: Trigger Production Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Authenticated Pipeline Run Request
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          FORCE_REPROCESS: ${{ github.event.inputs.force_reprocess || 'false' }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::error::Secret API_URL is not configured."
+            exit 1
+          fi
+
+          if [ -z "$API_KEY" ]; then
+            echo "::error::Secret API_KEY is not configured."
+            exit 1
+          fi
+
+          # Normalize base URL (ensure https scheme and remove trailing slash)
+          BASE_URL="$API_URL"
+          if [[ ! "$BASE_URL" =~ ^https?:// ]]; then
+            BASE_URL="https://$BASE_URL"
+          fi
+          BASE_URL="${BASE_URL%/}"
+          TARGET_URL="${BASE_URL}/pipeline/run"
+
+          echo "Triggering pipeline at: ${TARGET_URL}"
+
+          # Construct JSON payload safely
+          if [ "$FORCE_REPROCESS" = "true" ]; then
+            PAYLOAD='{"sync_to_sheets": true, "force_reprocess": true}'
+          else
+            PAYLOAD='{"sync_to_sheets": true}'
+          fi
+
+          # Execute curl request without exposing API_KEY in logs
+          HTTP_RESPONSE=$(curl --silent --show-error --fail-with-body \
+            --request POST "$TARGET_URL" \
+            --header "Content-Type: application/json" \
+            --header "X-API-Key: ${API_KEY}" \
+            --data "$PAYLOAD")
+          CURL_EXIT=$?
+
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "::error::Pipeline trigger failed with exit code $CURL_EXIT"
+            echo "Response: $HTTP_RESPONSE"
+            exit 1
+          fi
+
+          echo "Pipeline run successfully accepted by server."
+          echo "Response: $HTTP_RESPONSE"
