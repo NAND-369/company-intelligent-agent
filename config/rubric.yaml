@@ -1,0 +1,27 @@
+version: "1.0.0"
+rubric_name: "B2B Enterprise Software & Tech Evaluation Rubric"
+description: "Configurable criteria definition for evaluating company fit based on extracted evidence."
+
+# Target profile definition
+target_criteria:
+  industry_focus: "B2B Software / Enterprise Technology / Robotics / Developer Infrastructure"
+  target_offerings: "Cloud platforms, AI/ML tools, autonomous systems, developer APIs, enterprise SaaS"
+  team_size_indicators: "Active technical hiring, engineering careers, multi-disciplinary technical teams"
+
+# Explicit positive indicators
+positive_signals:
+  - "Clear B2B or enterprise value proposition (e.g. enterprise integrations, logistics, automation, API services)"
+  - "Active engineering/technical job openings (e.g. Python, C++, Backend, Robotics, Data Platform)"
+  - "Verified corporate domain and digital presence"
+
+# Explicit disqualifying indicators
+disqualifying_signals:
+  - "Direct-to-consumer (B2C) physical retail, fashion, or consumer marketplace without enterprise software"
+  - "Parked domain, placeholder landing page, or defunct business"
+  - "Dead or non-functional web property with failed connection signals"
+
+# Confidence guidelines
+confidence_guidelines:
+  high_confidence_threshold: 0.85
+  moderate_confidence_threshold: 0.60
+  insufficient_evidence_threshold: 0.30

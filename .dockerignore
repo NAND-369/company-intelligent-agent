@@ -1,0 +1,42 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+credentials*.json
+service_account*.json
+google-credentials*.json
+
+# Python & Build artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov
+dist
+build
+*.egg-info
+.eggs
+
+# Virtual environments
+.venv
+venv
+env
+ENV
+
+# IDEs & OS artifacts
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Robotics - Dynamic Careers & Open Roles</title>
+    <meta name="description" content="Join our engineering team building next-generation warehouse robots.">
+    <meta property="og:title" content="Quantum Robotics Careers">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 2rem; }
+        .job-card { border: 1px solid #e2e8f0; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; }
+        .job-dept { color: #3b82f6; font-weight: bold; }
+        .job-location { color: #64748b; font-size: 0.9rem; }
+        .loading-spinner { color: #94a3b8; font-style: italic; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Quantum Robotics Careers</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/products">Robotics Fleet</a>
+            <a href="/careers">Careers (Active)</a>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Current Open Positions</h2>
+        <p>Explore opportunities across our hardware, software, and autonomous systems divisions.</p>
+
+        <!-- Initial DOM state: static placeholder before JavaScript execution -->
+        <div id="jobs-container">
+            <p class="loading-spinner">Loading dynamic open positions from ATS...</p>
+        </div>
+    </main>
+
+    <!-- Client-side JavaScript that populates DOM dynamically after hydration -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            setTimeout(function() {
+                var container = document.getElementById("jobs-container");
+                if (!container) return;
+
+                var jobs = [
+                    {
+                        title: "Senior Backend Engineer",
+                        dept: "Engineering",
+                        location: "Remote (US/EU)",
+                        tech: "Python, FastAPI, PostgreSQL, Docker, Kubernetes",
+                        url: "/careers/senior-backend-engineer"
+                    },
+                    {
+                        title: "Robotics Control Specialist",
+                        dept: "Autonomous Systems",
+                        location: "San Francisco, CA",
+                        tech: "C++, ROS2, Computer Vision, SLAM",
+                        url: "/careers/robotics-control-specialist"
+                    },
+                    {
+                        title: "Staff Data Platform Engineer",
+                        dept: "Engineering",
+                        location: "New York, NY (Hybrid)",
+                        tech: "Python, Apache Spark, Kafka, AWS, Snowflake",
+                        url: "/careers/staff-data-platform-engineer"
+                    }
+                ];
+
+                var html = '<div class="jobs-list" data-total-jobs="' + jobs.length + '">';
+                for (var i = 0; i < jobs.length; i++) {
+                    var j = jobs[i];
+                    html += '<div class="job-card" data-job-id="job-' + (i + 1) + '">';
+                    html += '<h3><a href="' + j.url + '">' + j.title + '</a></h3>';
+                    html += '<span class="job-dept">' + j.dept + '</span> | ';
+                    html += '<span class="job-location">' + j.location + '</span>';
+                    html += '<p><strong>Required Tech Stack:</strong> ' + j.tech + '</p>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                container.innerHTML = html;
+            }, 50);
+        });
+    </script>
+</body>
+</html>
