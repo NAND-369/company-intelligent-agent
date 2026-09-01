@@ -19,8 +19,22 @@ def test_settings_custom_values() -> None:
         PORT=9000,
         LOG_LEVEL="DEBUG",
         DATABASE_URL="postgresql+asyncpg://user:pass@customhost:5432/custom_db",
+        LLM_MODEL="gemini-2.5-flash",
     )
     assert custom.app_name == "Custom Agent"
     assert custom.port == 9000
     assert custom.log_level == "DEBUG"
     assert custom.database_url == "postgresql+asyncpg://user:pass@customhost:5432/custom_db"
+    assert custom.llm_model == "gemini-2.5-flash"
+
+
+def test_gemini_llm_client_model_url_construction() -> None:
+    """Test that GeminiLLMClient formats the endpoint URL cleanly with and without models/ prefix."""
+    from app.llm.client import GeminiLLMClient
+
+    client1 = GeminiLLMClient(api_key="test-key", model="gemini-2.5-flash")
+    assert client1.base_url == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+    client2 = GeminiLLMClient(api_key="test-key", model="models/gemini-2.5-flash")
+    assert client2.base_url == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
