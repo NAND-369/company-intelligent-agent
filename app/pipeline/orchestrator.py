@@ -130,9 +130,14 @@ class PipelineOrchestrator:
                     result.errors.append(msg)
 
             # 3. Stage 2: Discover companies needing evaluation
+            statuses = (
+                [CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.JUDGED, CompanyStatus.SYNCED]
+                if req.force_reprocess
+                else [CompanyStatus.PENDING, CompanyStatus.ENRICHED]
+            )
             stmt = (
                 select(Company)
-                .where(Company.status.in_([CompanyStatus.PENDING, CompanyStatus.ENRICHED]))
+                .where(Company.status.in_(statuses))
                 .order_by(Company.created_at.asc())
             )
             if req.limit:
@@ -142,7 +147,7 @@ class PipelineOrchestrator:
             candidates = list(candidates_res.scalars().all())
             result.companies_discovered = len(candidates)
 
-            logger.info("Stage 2: Discovered %d candidate companies for processing.", len(candidates))
+            logger.info("Stage 2: Discovered %d candidate companies for processing (force_reprocess=%s).", len(candidates), req.force_reprocess)
 
             # 4. Handle Dry Run Preview
             if req.dry_run:
@@ -162,6 +167,7 @@ class PipelineOrchestrator:
                             session=self.session,
                             company_id=company.id,
                             lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
+                            force=req.force_reprocess,
                         )
                         await self.session.commit()
 
@@ -169,7 +175,10 @@ class PipelineOrchestrator:
                             logger.info("Company '%s' is leased by another worker. Skipping.", company.name)
                             continue
 
-                        co_result = await self.processor.process_company(company)
+                        co_result = await self.processor.process_company(
+                            company,
+                            force_reprocess=req.force_reprocess,
+                        )
                         result.company_results.append(co_result)
                         result.companies_processed += 1
 
@@ -185,9 +194,14 @@ class PipelineOrchestrator:
                             # Stage 4 (Optional): Synchronize verdict back to Google Sheets row
                             if req.sync_to_sheets:
                                 try:
-                                    logger.info("Synchronizing verdict for '%s' to Google Sheets...", company.name)
+                                    logger.info(
+                                        "Synchronizing verdict for '%s' to Google Sheets (force=%s)...",
+                                        company.name,
+                                        req.force_reprocess,
+                                    )
                                     sync_res = await self.sync_service.sync_company(
                                         company_id=company.id,
+                                        force=req.force_reprocess,
                                         dry_run=req.dry_run,
                                     )
                                     if sync_res.status == SyncOutcome.SUCCESS:

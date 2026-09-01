@@ -18,6 +18,7 @@ class PipelineRunRequest(BaseModel):
 
     run_id: Optional[uuid.UUID] = Field(default=None, description="Optional pre-allocated PipelineRun UUID to reuse")
     limit: Optional[int] = Field(default=None, ge=1, le=500, description="Max companies to process in this run")
+    force_reprocess: bool = Field(default=False, description="Re-evaluate companies even if previously synced or judged")
     dry_run: bool = Field(default=False, description="Preview actions without mutating database state")
     skip_ingestion: bool = Field(default=False, description="Skip Google Sheets fetch and process existing DB companies")
     sync_to_sheets: bool = Field(default=False, description="Synchronize evaluated verdicts back to Google Sheets rows")

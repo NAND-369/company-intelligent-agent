@@ -44,34 +44,45 @@ class CompanyProcessor:
             else self.settings.pipeline_browser_timeout_seconds
         )
 
-    async def process_company(self, company: Company) -> PipelineCompanyResult:
+    async def process_company(
+        self,
+        company: Company,
+        force_reprocess: bool = False,
+    ) -> PipelineCompanyResult:
         """
         Execute lifecycle stages for a company:
         1. Check completed work (idempotency/resumability)
         2. HTTP Enrichment (if missing)
         3. Browser Enrichment (if missing and enabled)
-        4. LLM Judgment (if missing)
+        4. LLM Judgment (if missing or force_reprocess)
         """
         start_time = time.monotonic()
-        logger.info("Processing company '%s' (id=%s, current_status=%s)", company.name, company.id, company.status)
+        logger.info(
+            "Processing company '%s' (id=%s, current_status=%s, force=%s)",
+            company.name,
+            company.id,
+            company.status,
+            force_reprocess,
+        )
 
         try:
-            # 1. Check if company is already evaluated
-            existing_verdict = await VerdictRepository.get_latest_by_company(self.session, company.id)
-            if company.status == CompanyStatus.JUDGED and existing_verdict is not None:
-                signals = await SignalRepository.list_by_company(self.session, company.id)
-                duration_ms = int((time.monotonic() - start_time) * 1000)
-                logger.info("Company '%s' already evaluated (verdict=%s). Skipping duplicate evaluation.", company.name, existing_verdict.fit)
-                return PipelineCompanyResult(
-                    company_id=company.id,
-                    company_name=company.name,
-                    website_url=company.website_url,
-                    status=company.status,
-                    fit_decision=existing_verdict.fit,
-                    confidence=existing_verdict.confidence,
-                    signals_count=len(signals),
-                    duration_ms=duration_ms,
-                )
+            # 1. Check if company is already evaluated (unless force_reprocess is True)
+            if not force_reprocess:
+                existing_verdict = await VerdictRepository.get_latest_by_company(self.session, company.id)
+                if company.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED) and existing_verdict is not None:
+                    signals = await SignalRepository.list_by_company(self.session, company.id)
+                    duration_ms = int((time.monotonic() - start_time) * 1000)
+                    logger.info("Company '%s' already evaluated (verdict=%s). Skipping duplicate evaluation.", company.name, existing_verdict.fit)
+                    return PipelineCompanyResult(
+                        company_id=company.id,
+                        company_name=company.name,
+                        website_url=company.website_url,
+                        status=company.status,
+                        fit_decision=existing_verdict.fit,
+                        confidence=existing_verdict.confidence,
+                        signals_count=len(signals),
+                        duration_ms=duration_ms,
+                    )
 
             # 2. Check existing signals to avoid re-extracting
             existing_signals = await SignalRepository.list_by_company(self.session, company.id)

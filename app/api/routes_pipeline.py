@@ -47,6 +47,7 @@ async def _run_pipeline_background(
             pipeline_request = PipelineRunRequest(
                 run_id=run_id,
                 limit=req.effective_batch_size,
+                force_reprocess=req.force_reprocess,
                 dry_run=req.dry_run,
                 skip_ingestion=req.skip_ingestion,
                 sync_to_sheets=req.sync_to_sheets,

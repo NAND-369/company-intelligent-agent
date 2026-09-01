@@ -130,6 +130,7 @@ class CompanyRepository:
         session: AsyncSession,
         company_id: uuid.UUID,
         lease_duration_minutes: int = 5,
+        force: bool = False,
     ) -> bool:
         """
         Atomically acquire a processing lease lock on a company.
@@ -140,8 +141,13 @@ class CompanyRepository:
         if not company:
             return False
 
-        # Allow lease if pending, enriched, failed, or expired
-        if company.status in (CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.FAILED) or (
+        # Allow lease if force=True (re-process JUDGED/SYNCED), or pending/enriched/failed, or expired lease
+        eligible_statuses = (
+            (CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.JUDGED, CompanyStatus.SYNCED)
+            if force
+            else (CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.FAILED)
+        )
+        if company.status in eligible_statuses or (
             company.lease_expires_at and company.lease_expires_at < now
         ):
             company.status = CompanyStatus.PROCESSING

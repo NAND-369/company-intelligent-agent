@@ -365,6 +365,60 @@ async def test_pipeline_orchestration_with_sync_stage(db_session: AsyncSession) 
     assert co.status == CompanyStatus.SYNCED
 
 
+@pytest.mark.asyncio
+async def test_pipeline_force_reprocess_overwrites_sheets_sync(db_session: AsyncSession) -> None:
+    """
+    Test that when a company is already SYNCED, running with force_reprocess=True and sync_to_sheets=True:
+    1. Discovers the SYNCED company.
+    2. Re-evaluates company with LLM judge.
+    3. Forces Google Sheets row overwrite.
+    4. Records sync audit log and leaves company in SYNCED status.
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Forced Sync Co",
+        website_url="https://forced-sync.com",
+        sheet_row_id="row_10",
+        status=CompanyStatus.SYNCED,
+    )
+    # Simulate initial verdict and sync log
+    await VerdictRepository.create(
+        session=db_session,
+        company_id=company.id,
+        fit=FitDecision.UNCERTAIN,
+        confidence=0.5,
+        reasoning=["Initial low confidence"],
+    )
+    await SyncLogRepository.create(
+        session=db_session,
+        company_id=company.id,
+        sync_direction=SyncDirection.DB_TO_SHEET,
+        status=SyncStatus.SUCCESS,
+    )
+    await db_session.commit()
+
+    mock_client = MockGoogleSheetsSyncClient()
+    sync_service = SheetsSyncService(session=db_session, client=mock_client)
+    orchestrator = PipelineOrchestrator(session=db_session, sync_service=sync_service)
+
+    # 1. Normal run skips the SYNCED company
+    res_normal = await orchestrator.run_pipeline(
+        PipelineRunRequest(skip_ingestion=True, sync_to_sheets=True, force_reprocess=False)
+    )
+    assert res_normal.companies_discovered == 0
+    assert mock_client.call_count == 0
+
+    # 2. Forced run discovers and re-syncs to row 10
+    res_forced = await orchestrator.run_pipeline(
+        PipelineRunRequest(skip_ingestion=True, sync_to_sheets=True, force_reprocess=True)
+    )
+    assert res_forced.companies_discovered == 1
+    assert res_forced.companies_processed == 1
+    assert res_forced.synced_count == 1
+    assert 10 in mock_client.row_updates
+    assert mock_client.call_count == 1
+
+
 # ==============================================================================
 # 6. FastAPI API Endpoint Sync Flag Verification
 # ==============================================================================

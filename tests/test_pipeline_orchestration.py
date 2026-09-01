@@ -247,15 +247,81 @@ async def test_pipeline_idempotent_second_run(db_session: AsyncSession) -> None:
     assert res1.companies_processed == 1
     assert res1.companies_succeeded == 1
 
-    # Second Run (Company already JUDGED)
+    # Second Run (Company already JUDGED -> discovers 0)
     res2 = await orchestrator.run_pipeline(PipelineRunRequest(skip_ingestion=True))
-    assert res2.companies_discovered == 0  # No PENDING / ENRICHED companies remaining
+    assert res2.companies_discovered == 0
 
-    # Signals and verdicts should NOT be duplicated
+    # Signals and verdicts should NOT be duplicated on second run
     signals = await SignalRepository.list_by_company(db_session, co.id)
     assert len(signals) == 1
     verdicts = await VerdictRepository.list_by_company(db_session, co.id)
     assert len(verdicts) == 1
+
+    # Third Run with force_reprocess=True (Should re-evaluate JUDGED company)
+    res3 = await orchestrator.run_pipeline(PipelineRunRequest(skip_ingestion=True, force_reprocess=True))
+    assert res3.companies_discovered == 1
+    assert res3.companies_processed == 1
+    assert res3.companies_succeeded == 1
+
+    # A second verdict record should now be created
+    verdicts_after_force = await VerdictRepository.list_by_company(db_session, co.id)
+    assert len(verdicts_after_force) == 2
+
+
+@pytest.mark.asyncio
+async def test_pipeline_force_reprocess_excludes_failed_companies(db_session: AsyncSession) -> None:
+    """
+    Verify that force_reprocess=True includes PENDING, ENRICHED, JUDGED, SYNCED,
+    but explicitly excludes FAILED companies (which require individual retry).
+    """
+    co_synced = await CompanyRepository.create(
+        session=db_session,
+        name="Synced Co",
+        website_url="https://synced.com",
+        sheet_row_id="row_synced",
+        status=CompanyStatus.SYNCED,
+    )
+    co_judged = await CompanyRepository.create(
+        session=db_session,
+        name="Judged Co",
+        website_url="https://judged.com",
+        sheet_row_id="row_judged",
+        status=CompanyStatus.JUDGED,
+    )
+    co_failed = await CompanyRepository.create(
+        session=db_session,
+        name="Failed Co",
+        website_url="https://failed.com",
+        sheet_row_id="row_failed",
+        status=CompanyStatus.FAILED,
+    )
+    await db_session.commit()
+
+    mock_routes = {
+        "https://synced.com": (200, REALISTIC_HTML_FIXTURE),
+        "https://judged.com": (200, REALISTIC_HTML_FIXTURE),
+    }
+    http_enricher = WebsiteEnricher(http_client=MockHttpClient(routes=mock_routes))
+    enrichment_service = HttpEnrichmentService(session=db_session, website_enricher=http_enricher)
+    llm_service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    processor = CompanyProcessor(session=db_session, http_enrichment_service=enrichment_service, llm_judge_service=llm_service, enable_browser=False)
+    orchestrator = PipelineOrchestrator(session=db_session, processor=processor)
+
+    # 1. Normal run discovers 0 companies (all are SYNCED, JUDGED, or FAILED)
+    res_normal = await orchestrator.run_pipeline(PipelineRunRequest(skip_ingestion=True, force_reprocess=False))
+    assert res_normal.companies_discovered == 0
+
+    # 2. Forced run discovers 2 companies (Synced Co, Judged Co) and skips Failed Co
+    res_forced = await orchestrator.run_pipeline(PipelineRunRequest(skip_ingestion=True, force_reprocess=True))
+    assert res_forced.companies_discovered == 2
+    assert res_forced.companies_processed == 2
+    assert res_forced.companies_succeeded == 2
+
+    # Failed Co must remain FAILED and unleased
+    fresh_failed = await CompanyRepository.get_by_id(db_session, co_failed.id)
+    assert fresh_failed is not None
+    assert fresh_failed.status == CompanyStatus.FAILED
+
 
 
 # ==============================================================================
@@ -470,20 +536,20 @@ async def test_pipeline_six_companies_batch_resilience(db_session: AsyncSession)
 
     # Custom processor that fails specifically on company 2
     orig_process = orchestrator.processor.process_company
-    async def resilient_process(company: Company):
+    async def resilient_process(company: Company, *args, **kwargs):
         if company.name == "Batch Company 2":
             raise ValueError("Simulated network crash during company 2 extraction")
-        return await orig_process(company)
+        return await orig_process(company, *args, **kwargs)
 
     orchestrator.processor.process_company = resilient_process
 
     # Custom sync service that fails specifically on company 3
     orig_sync = orchestrator.sync_service.sync_company
-    async def resilient_sync(company_id, dry_run=False):
+    async def resilient_sync(company_id, *args, **kwargs):
         co = await CompanyRepository.get_by_id(db_session, company_id)
         if co and co.name == "Batch Company 3":
             raise RuntimeError("Google Sheets API 500 quota outage during company 3 sync")
-        return await orig_sync(company_id, dry_run=dry_run)
+        return await orig_sync(company_id, *args, **kwargs)
 
     orchestrator.sync_service.sync_company = resilient_sync
 
