@@ -34,12 +34,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         __version__,
         settings.app_env,
     )
-    # Ensure database schema is initialized
+    # Ensure database schema is initialized and recover any dangling runs from previous instance
     try:
         await init_database_tables()
         logger.info("Database schema verification/initialization completed.")
+
+        from sqlalchemy import update
+        from app.database.enums import PipelineRunStatus
+        from app.database.models import PipelineRun
+        import app.database.session as session_module
+
+        async with session_module.async_session_factory() as session:
+            stmt = (
+                update(PipelineRun)
+                .where(PipelineRun.status == PipelineRunStatus.RUNNING)
+                .values(
+                    status=PipelineRunStatus.FAILED,
+                    completed_at=datetime.now(timezone.utc),
+                    error_summary={"startup_recovery": "Interrupted by deployment or server restart."},
+                )
+            )
+            res = await session.execute(stmt)
+            if res.rowcount > 0:
+                logger.info("Startup recovery: marked %d dangling RUNNING run(s) as FAILED.", res.rowcount)
+            await session.commit()
     except Exception as db_err:
-        logger.warning("Database table initialization deferred or failed: %s", db_err)
+        logger.warning("Database table initialization/recovery deferred or failed: %s", db_err)
 
     scheduler = get_scheduler()
     scheduler.start()

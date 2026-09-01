@@ -28,6 +28,10 @@ from app.pipeline.schemas import PipelineRunRequest
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Pipeline Runs"])
 
+_current_running_task: Optional[asyncio.Task] = None
+_current_run_id: Optional[uuid.UUID] = None
+_trigger_lock = asyncio.Lock()
+
 
 async def _run_pipeline_background(
     run_id: uuid.UUID,
@@ -35,6 +39,7 @@ async def _run_pipeline_background(
     trigger_type: TriggerType,
 ) -> None:
     """Execute pipeline in a dedicated background async task with isolated session."""
+    global _current_running_task, _current_run_id
     logger.info("Starting background pipeline task for run_id=%s", run_id)
     try:
         async with session_module.async_session_factory() as session:
@@ -61,6 +66,9 @@ async def _run_pipeline_background(
                 await session.commit()
         except Exception as cleanup_exc:
             logger.exception("Failed to mark background pipeline run %s as FAILED: %s", run_id, cleanup_exc)
+    finally:
+        _current_running_task = None
+        _current_run_id = None
 
 
 @router.post(
@@ -76,7 +84,7 @@ async def trigger_run(
     _auth: bool = Depends(require_api_key),
 ) -> TriggerRunResponse:
     """Validate active runs, create RUNNING record, and dispatch background execution."""
-    # 1. Check for active run conflict (with automatic stale/orphaned recovery)
+    # 1. Check for active run conflict in database
     active_stmt = (
         select(PipelineRun)
         .where(PipelineRun.status == PipelineRunStatus.RUNNING)
@@ -92,8 +100,11 @@ async def trigger_run(
         if started_at and started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=timezone.utc)
 
-        stale_threshold_seconds = 1800  # 30 minutes
-        if started_at and (now - started_at).total_seconds() > stale_threshold_seconds:
+        # Stale threshold: 5 minutes (matching lease duration)
+        stale_threshold_seconds = 300
+        is_stale = (started_at is None) or ((now - started_at).total_seconds() > stale_threshold_seconds)
+
+        if is_stale:
             logger.warning(
                 "Active run %s started at %s (>%ds ago); recovering orphaned run to FAILED.",
                 active_run.id,
@@ -104,7 +115,7 @@ async def trigger_run(
                 session=session,
                 run_id=active_run.id,
                 status=PipelineRunStatus.FAILED,
-                error_summary={"stale_recovery": "Run timed out or orphaned by server restart."},
+                error_summary={"stale_recovery": "Run timed out or orphaned by previous server restart."},
             )
             await session.commit()
         else:
