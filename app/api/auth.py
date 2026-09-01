@@ -32,16 +32,14 @@ def build_error_response(
 class APIKeyValidator:
     """Validates API Key from X-API-Key or Authorization Bearer header."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
-        self.settings = settings or get_settings()
-
     def __call__(
         self,
         x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
         authorization: Optional[str] = Header(None, alias="Authorization"),
     ) -> bool:
+        settings = get_settings()
         # Development bypass if no key is configured
-        if not self.settings.api_key:
+        if not settings.api_key:
             return True
 
         provided_key: Optional[str] = None
@@ -53,7 +51,7 @@ class APIKeyValidator:
             else:
                 provided_key = authorization.strip()
 
-        if not provided_key or provided_key != self.settings.api_key:
+        if not provided_key or provided_key != settings.api_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing API key in X-API-Key or Authorization header.",
@@ -62,9 +60,9 @@ class APIKeyValidator:
 
 
 def require_api_key(
-    validator: APIKeyValidator = Depends(APIKeyValidator),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ) -> bool:
     """FastAPI route dependency enforcing API key authentication."""
+    validator = APIKeyValidator()
     return validator(x_api_key=x_api_key, authorization=authorization)

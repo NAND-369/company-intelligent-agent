@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("website_url", sa.String(length=1024), nullable=False),
         sa.Column("domain", sa.String(length=255), nullable=True),
-        sa.Column("sheet_row_id", sa.String(length=128), nullable=False),
+        sa.Column("sheet_row_id", sa.String(length=128), nullable=True),
         sa.Column("status", sa.String(length=32), server_default="PENDING", nullable=False),
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),

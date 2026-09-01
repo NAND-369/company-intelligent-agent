@@ -58,9 +58,9 @@ class Company(Base):
     domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
     # Unique constraint on Google Sheet row identity guarantees idempotent ingestion
-    sheet_row_id: Mapped[str] = mapped_column(
+    sheet_row_id: Mapped[Optional[str]] = mapped_column(
         String(128),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )

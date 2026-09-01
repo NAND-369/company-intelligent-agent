@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import app.database.session as session_module
 from app.api.auth import require_api_key
 from app.api.schemas import (
+    CompanyCreateRequest,
+    CompanyCreateResponse,
     CompanyDetailResponse,
     CompanyListItem,
     CompanyListResponse,
@@ -193,7 +195,62 @@ async def get_company_detail(
     )
 
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+@router.post(
+    "",
+    response_model=CompanyCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Company",
+    description="Manually ingest a new company into PostgreSQL for pipeline intelligence processing.",
+)
+async def create_company(
+    company_in: CompanyCreateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _auth: bool = Depends(require_api_key),
+) -> CompanyCreateResponse:
+    """Register a new company and optionally enqueue immediate evaluation."""
+    clean_url = company_in.website_url.strip()
+    clean_name = company_in.name.strip()
+
+    # Check for existing company by normalized website URL
+    existing = await CompanyRepository.get_by_website(session, clean_url)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A company with website URL '{clean_url}' already exists (ID: {existing.id}).",
+        )
+
+    # Extract domain
+    domain = None
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(clean_url if "://" in clean_url else f"https://{clean_url}")
+        domain = parsed.netloc.lower().replace("www.", "") if parsed.netloc else None
+    except Exception:
+        pass
+
+    company = await CompanyRepository.create(
+        session=session,
+        name=clean_name,
+        website_url=clean_url,
+        domain=domain,
+        sheet_row_id=company_in.sheet_row_id,
+        status=CompanyStatus.PENDING,
+    )
+    await session.commit()
+
+    if company_in.process_immediately:
+        asyncio.create_task(_retry_company_background(company.id, force_re_enrichment=True))
+
+    return CompanyCreateResponse(
+        id=company.id,
+        name=company.name,
+        website_url=company.website_url,
+        domain=company.domain,
+        sheet_row_id=company.sheet_row_id,
+        status=company.status,
+        created_at=company.created_at,
+        message="Company registered successfully and queued for intelligence processing.",
+    )
 
 
 @router.post(
@@ -205,16 +262,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 )
 async def retry_company(
     company_id: uuid.UUID,
-    http_request: Request,
+    options: CompanyRetryRequest = CompanyRetryRequest(),
     session: AsyncSession = Depends(get_db_session),
     _auth: bool = Depends(require_api_key),
 ) -> CompanyRetryResponse:
     """Reset company processing lease and trigger single-company re-evaluation."""
-    try:
-        body = await http_request.json()
-        req = CompanyRetryRequest.model_validate(body) if body else CompanyRetryRequest()
-    except Exception:
-        req = CompanyRetryRequest()
+    req = options
     company = await CompanyRepository.get_by_id(session, company_id)
     if not company:
         raise HTTPException(

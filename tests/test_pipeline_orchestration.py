@@ -287,3 +287,66 @@ async def test_api_trigger_pipeline_run(async_client: AsyncClient) -> None:
     )
     assert alias_resp.status_code == 409
     assert alias_resp.json()["error"]["code"] == "CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_manual_api_company_flow_without_google_sheets(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test complete flow for manual/API ingested company without Google Sheets:
+    1. POST /companies to create company manually.
+    2. Execute PipelineOrchestrator without Google Sheets (skip_ingestion=True).
+    3. Verify Company reaches JUDGED status, Verdict is persisted, and GET /companies/{id} returns full results.
+    """
+    settings = get_settings()
+    headers = {"X-API-Key": settings.api_key}
+
+    # Step 1: Create company manually via API
+    create_resp = await async_client.post(
+        "/companies",
+        json={
+            "name": "Acme Autonomous Corp",
+            "website_url": "https://acme-autonomous.io",
+            "process_immediately": False,
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 201
+    company_id = create_resp.json()["id"]
+
+    # Step 2: Run pipeline with mocked enricher and LLM
+    mock_routes = {"https://acme-autonomous.io": (200, REALISTIC_HTML_FIXTURE)}
+    http_enricher = WebsiteEnricher(http_client=MockHttpClient(routes=mock_routes))
+    enrichment_service = HttpEnrichmentService(session=db_session, website_enricher=http_enricher)
+    llm_service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=enrichment_service,
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    result = await orchestrator.run_pipeline(
+        PipelineRunRequest(skip_ingestion=True, sync_to_sheets=False)
+    )
+
+    assert result.status == PipelineRunStatus.COMPLETED
+    assert result.companies_processed >= 1
+    assert result.companies_succeeded >= 1
+
+    # Step 3: Query GET /companies/{company_id} to verify full results available via API
+    detail_resp = await async_client.get(f"/companies/{company_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["name"] == "Acme Autonomous Corp"
+    assert detail["status"] in ("JUDGED", "SYNCED")
+    assert detail["latest_verdict"] is not None
+    assert detail["latest_verdict"]["fit"] in ("YES", "NO", "UNCERTAIN")
+    assert len(detail["signals"]) >= 1

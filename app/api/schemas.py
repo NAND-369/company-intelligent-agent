@@ -182,6 +182,8 @@ class CompanyDetailResponse(BaseModel):
 class CompanyRetryRequest(BaseModel):
     """Payload for triggering single-company re-evaluation."""
 
+    model_config = ConfigDict(extra="ignore")
+
     force_re_enrichment: bool = Field(default=True, description="Force re-crawling website/career pages")
 
 
@@ -192,3 +194,27 @@ class CompanyRetryResponse(BaseModel):
     status: str = "PROCESSING"
     message: str
     scheduled_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CompanyCreateRequest(BaseModel):
+    """Payload for creating/ingesting a company manually via API."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str = Field(..., min_length=1, max_length=255, description="Company name", examples=["Stripe"])
+    website_url: str = Field(..., min_length=1, max_length=1024, description="Company official website URL", examples=["https://stripe.com"])
+    sheet_row_id: Optional[str] = Field(default=None, max_length=64, description="Optional Google Sheet row reference", examples=["manual_1"])
+    process_immediately: bool = Field(default=False, description="Trigger background enrichment and evaluation immediately")
+
+
+class CompanyCreateResponse(BaseModel):
+    """Response returned upon successful manual company creation."""
+
+    id: uuid.UUID
+    name: str
+    website_url: str
+    domain: Optional[str] = None
+    sheet_row_id: Optional[str] = None
+    status: CompanyStatus
+    created_at: datetime
+    message: str = "Company registered successfully."

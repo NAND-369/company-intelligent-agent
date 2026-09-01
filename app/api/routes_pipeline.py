@@ -59,9 +59,6 @@ async def _run_pipeline_background(
             await session.commit()
 
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-
-
 @router.post(
     "/run",
     response_model=TriggerRunResponse,
@@ -70,17 +67,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
     description="Enqueue an on-demand intelligence pipeline execution in the background.",
 )
 async def trigger_run(
-    http_request: Request,
+    config: TriggerRunRequest = TriggerRunRequest(),
     session: AsyncSession = Depends(get_db_session),
     _auth: bool = Depends(require_api_key),
 ) -> TriggerRunResponse:
     """Validate active runs, create RUNNING record, and dispatch background execution."""
-    try:
-        body = await http_request.json()
-        req = TriggerRunRequest.model_validate(body) if body else TriggerRunRequest()
-    except Exception:
-        req = TriggerRunRequest()
-
     # 1. Check for active run conflict
     active_stmt = select(PipelineRun).where(PipelineRun.status == PipelineRunStatus.RUNNING).limit(1)
     active_res = await session.execute(active_stmt)
@@ -101,13 +92,13 @@ async def trigger_run(
     await session.commit()
 
     # 3. Spawn background execution
-    asyncio.create_task(_run_pipeline_background(run.id, req, TriggerType.ON_DEMAND_API))
+    asyncio.create_task(_run_pipeline_background(run.id, config, TriggerType.ON_DEMAND_API))
 
     return TriggerRunResponse(
         run_id=run.id,
         status="RUNNING",
         message="Pipeline run initiated successfully.",
-        batch_size=req.effective_batch_size,
+        batch_size=config.effective_batch_size,
         triggered_at=datetime.now(timezone.utc),
         links={"status_url": f"/runs/{run.id}"},
     )
@@ -121,12 +112,12 @@ async def trigger_run(
     description="Alias endpoint for triggering a pipeline execution.",
 )
 async def trigger_pipeline_run(
-    http_request: Request,
+    config: TriggerRunRequest = TriggerRunRequest(),
     session: AsyncSession = Depends(get_db_session),
     _auth: bool = Depends(require_api_key),
 ) -> TriggerRunResponse:
     """Alias endpoint for triggering a pipeline execution."""
-    return await trigger_run(http_request=http_request, session=session, _auth=_auth)
+    return await trigger_run(config=config, session=session, _auth=_auth)
 
 
 @router.get(

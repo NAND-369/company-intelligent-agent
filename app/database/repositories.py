@@ -54,11 +54,18 @@ class CompanyRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_website(session: AsyncSession, website_url: str) -> Optional[Company]:
+        """Find a company by its normalized website URL."""
+        stmt = select(Company).where(Company.website_url == website_url)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create(
         session: AsyncSession,
         name: str,
         website_url: str,
-        sheet_row_id: str,
+        sheet_row_id: Optional[str] = None,
         domain: Optional[str] = None,
         status: CompanyStatus = CompanyStatus.PENDING,
     ) -> Company:

@@ -341,3 +341,58 @@ async def test_retry_company_evaluation_success(
     assert data["company_id"] == str(co.id)
     assert data["status"] == "PROCESSING"
     assert "scheduled_at" in data
+
+
+@pytest.mark.asyncio
+async def test_create_company_manual_success(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test POST /companies manually creates a new company record in PostgreSQL."""
+    payload = {
+        "name": "Manual Ingestion Corp",
+        "website_url": "https://manual-ingest.com",
+        "sheet_row_id": "api_101",
+        "process_immediately": False,
+    }
+    response = await async_client.post("/companies", json=payload, headers=auth_headers)
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Manual Ingestion Corp"
+    assert data["website_url"] == "https://manual-ingest.com"
+    assert data["domain"] == "manual-ingest.com"
+    assert data["status"] == "PENDING"
+    assert "id" in data
+
+
+@pytest.mark.asyncio
+async def test_create_company_duplicate_conflict(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test POST /companies returns 409 Conflict for duplicate website URL."""
+    payload = {
+        "name": "Duplicate Target Corp",
+        "website_url": "https://duplicate-target.com",
+    }
+    res1 = await async_client.post("/companies", json=payload, headers=auth_headers)
+    assert res1.status_code == 201
+
+    res2 = await async_client.post("/companies", json=payload, headers=auth_headers)
+    assert res2.status_code == 409
+    data = res2.json()
+    assert data["error"]["code"] == "CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_create_company_validation_error(
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Test POST /companies returns 422 Unprocessable Entity for invalid payload."""
+    payload = {"name": "Missing Website Corp"}
+    response = await async_client.post("/companies", json=payload, headers=auth_headers)
+    assert response.status_code == 422
