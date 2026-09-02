@@ -73,10 +73,14 @@ class FakeLLMClient(LLMClient):
             or "failed" in evidence_text
         ):
             return json.dumps({
+                "disqualified_by_evidence": False,
+                "disqualification_reason": None,
+                "qualified_by_evidence": False,
+                "qualification_reason": None,
+                "reasoning": ["No verified signals exist in PostgreSQL database for this company."],
                 "fit": "UNCERTAIN",
                 "confidence": 0.20,
                 "confidence_rationale": "No factual evidence signals were available for analysis.",
-                "reasoning": ["No verified signals exist in PostgreSQL database for this company."],
                 "follow_up_question": "Can you provide a functional website URL?",
                 "key_signals_used": [],
             })
@@ -86,13 +90,17 @@ class FakeLLMClient(LLMClient):
         is_b2b = any(w in evidence_text for w in ("developer api", "enterprise security", "developer platform", "robotics", "warehouse fleet"))
         if is_b2c and is_b2b:
             return json.dumps({
-                "fit": "UNCERTAIN",
-                "confidence": 0.30,
-                "confidence_rationale": "Evidence contains conflicting signals between consumer marketplace and developer platform.",
+                "disqualified_by_evidence": False,
+                "disqualification_reason": None,
+                "qualified_by_evidence": False,
+                "qualification_reason": None,
                 "reasoning": [
                     "Website exhibits contradictory indicators of both consumer shopping and enterprise developer tools.",
                     "Unable to resolve whether primary operating model is B2B or B2C."
                 ],
+                "fit": "UNCERTAIN",
+                "confidence": 0.30,
+                "confidence_rationale": "Evidence contains conflicting signals between consumer marketplace and developer platform.",
                 "follow_up_question": "Can you clarify whether the primary business model is enterprise B2B or consumer B2C?",
                 "key_signals_used": ["HTTP_WEBSITE"],
             })
@@ -100,26 +108,34 @@ class FakeLLMClient(LLMClient):
         # 3. Explicit B2C Consumer Retail / Marketplace in evidence -> NO with high confidence
         if is_b2c:
             return json.dumps({
-                "fit": "NO",
-                "confidence": 0.95,
-                "confidence_rationale": "Company explicitly falls under disqualifying B2C consumer retail criteria.",
+                "disqualified_by_evidence": True,
+                "disqualification_reason": "Evidence explicitly establishes direct-to-consumer online shopping / retail marketplace operations.",
+                "qualified_by_evidence": False,
+                "qualification_reason": None,
                 "reasoning": [
                     "Website copy indicates consumer retail and online shopping marketplace operations.",
                     "Disqualifying signals identified: consumer goods, retail wishlist, consumer rewards, and absence of B2B enterprise software."
                 ],
+                "fit": "NO",
+                "confidence": 0.95,
+                "confidence_rationale": "Company explicitly falls under disqualifying B2C consumer retail criteria.",
                 "follow_up_question": None,
                 "key_signals_used": ["HTTP_WEBSITE"],
             })
 
         # 4. Target B2B Enterprise Software / Tech -> YES with high confidence
         return json.dumps({
+            "disqualified_by_evidence": False,
+            "disqualification_reason": None,
+            "qualified_by_evidence": True,
+            "qualification_reason": "Verified enterprise developer infrastructure / AI platform with API capabilities.",
+            "reasoning": [
+                "HTTP signal demonstrates an autonomous robotics fleet or enterprise platform targeting business customers.",
+                "Browser careers signal confirms active engineering roles (Python, C++, ROS2)."
+            ],
             "fit": "YES",
             "confidence": 0.88,
             "confidence_rationale": "Strong positive concordance across HTTP and browser careers signals.",
-            "reasoning": [
-                "HTTP signal demonstrates an autonomous robotics fleet or enterprise platform targeting business customers.",
-                "Browser careers signal confirms 3 active engineering roles (Python, C++, ROS2)."
-            ],
             "follow_up_question": None,
             "key_signals_used": ["HTTP_WEBSITE", "BROWSER_CAREERS"],
         })
@@ -151,23 +167,42 @@ class GeminiLLMClient(LLMClient):
                 "response_schema": {
                     "type": "OBJECT",
                     "properties": {
-                        "fit": {
-                            "type": "STRING",
-                            "enum": ["YES", "NO", "UNCERTAIN"],
-                            "description": "YES if evidence establishes target B2B software/AI/infrastructure fit; NO if evidence establishes disqualification or consumer retail/e-commerce/non-target business; UNCERTAIN strictly if evidence is genuinely insufficient/inaccessible to identify the business.",
+                        "disqualified_by_evidence": {
+                            "type": "BOOLEAN",
+                            "description": "True if verified evidence establishes a disqualifying business model/category (e.g. B2C e-commerce, consumer retail, fashion, groceries, consumer marketplace, physical goods, agency, parked domain).",
                         },
-                        "confidence": {
-                            "type": "NUMBER",
-                            "description": "Calibrated confidence score between 0.0 and 1.0 (>= 0.80 for clear YES/NO, < 0.50 for UNCERTAIN)",
-                        },
-                        "confidence_rationale": {
+                        "disqualification_reason": {
                             "type": "STRING",
-                            "description": "Concise explanation of the confidence level",
+                            "nullable": True,
+                            "description": "Specific citation from evidence explaining why company is disqualified, or null.",
+                        },
+                        "qualified_by_evidence": {
+                            "type": "BOOLEAN",
+                            "description": "True if verified evidence establishes target B2B software, enterprise tech, developer platforms/APIs, AI/ML infrastructure, or enterprise SaaS.",
+                        },
+                        "qualification_reason": {
+                            "type": "STRING",
+                            "nullable": True,
+                            "description": "Specific citation from evidence explaining why company meets target criteria, or null.",
                         },
                         "reasoning": {
                             "type": "ARRAY",
                             "items": {"type": "STRING"},
                             "description": "List of evidence-grounded deductive statements citing facts",
+                        },
+                        "fit": {
+                            "type": "STRING",
+                            "enum": ["YES", "NO", "UNCERTAIN"],
+                            "description": "Derived strictly by precedence: 1. If disqualified_by_evidence is true -> NO; 2. Else if qualified_by_evidence is true -> YES; 3. Else -> UNCERTAIN.",
+                        },
+                        "confidence": {
+                            "type": "NUMBER",
+                            "description": "Calibrated confidence score in final classification (>= 0.80 for clear YES/NO, < 0.50 for UNCERTAIN)",
+                        },
+                        "confidence_rationale": {
+                            "type": "STRING",
+                            "nullable": True,
+                            "description": "Concise explanation of the confidence level",
                         },
                         "follow_up_question": {
                             "type": "STRING",
@@ -181,11 +216,11 @@ class GeminiLLMClient(LLMClient):
                         },
                     },
                     "required": [
+                        "disqualified_by_evidence",
+                        "qualified_by_evidence",
+                        "reasoning",
                         "fit",
                         "confidence",
-                        "confidence_rationale",
-                        "reasoning",
-                        "follow_up_question",
                         "key_signals_used",
                     ],
                 },

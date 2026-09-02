@@ -873,3 +873,99 @@ async def test_case_e_semantic_contradiction_repaired_to_no(db_session: AsyncSes
     assert verdict.fit == FitDecision.NO
     assert verdict.confidence == 0.95
     assert len(fake_client.call_history) == 2  # 1 initial call + 1 repair call
+
+
+# ==============================================================================
+# 7. Independent Decision Precedence Contract Unit Test
+# ==============================================================================
+
+def test_decision_precedence_logic_independent_of_gemini_wording() -> None:
+    """
+    Directly verify the decision precedence contract on StructuredLLMVerdict:
+    1. Disqualified by evidence -> fit MUST be NO (confidence >= 0.50).
+    2. Qualified by evidence -> fit MUST be YES (confidence >= 0.50).
+    3. Neither established -> fit MUST be UNCERTAIN (confidence < 0.50).
+    4. Conflicting states (e.g. disqualified=True + fit=UNCERTAIN) are strictly rejected.
+    """
+    # Valid Case 1: Disqualified B2C
+    v1 = StructuredLLMVerdict.model_validate({
+        "disqualified_by_evidence": True,
+        "disqualification_reason": "Direct-to-consumer online fashion marketplace",
+        "qualified_by_evidence": False,
+        "qualification_reason": None,
+        "reasoning": ["Evidence establishes online retail store."],
+        "fit": "NO",
+        "confidence": 0.95,
+        "confidence_rationale": "Clear B2C disqualification",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+    assert v1.fit == FitDecision.NO
+    assert v1.confidence == 0.95
+
+    # Valid Case 2: Qualified B2B
+    v2 = StructuredLLMVerdict.model_validate({
+        "disqualified_by_evidence": False,
+        "disqualification_reason": None,
+        "qualified_by_evidence": True,
+        "qualification_reason": "Enterprise developer infrastructure platform",
+        "reasoning": ["Evidence establishes cloud developer APIs."],
+        "fit": "YES",
+        "confidence": 0.90,
+        "confidence_rationale": "Clear B2B developer fit",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+    assert v2.fit == FitDecision.YES
+    assert v2.confidence == 0.90
+
+    # Valid Case 3: Genuinely Inconclusive
+    v3 = StructuredLLMVerdict.model_validate({
+        "disqualified_by_evidence": False,
+        "disqualification_reason": None,
+        "qualified_by_evidence": False,
+        "qualification_reason": None,
+        "reasoning": ["Evidence is completely empty due to scraping timeout."],
+        "fit": "UNCERTAIN",
+        "confidence": 0.20,
+        "confidence_rationale": "Insufficient evidence",
+        "follow_up_question": "Can you supply an active URL?",
+        "key_signals_used": [],
+    })
+    assert v3.fit == FitDecision.UNCERTAIN
+    assert v3.confidence == 0.20
+
+    # Invalid Case 4: Disqualified=True but fit=UNCERTAIN (Must reject)
+    with pytest.raises(ValueError, match="disqualified_by_evidence is True, so fit MUST be NO"):
+        StructuredLLMVerdict.model_validate({
+            "disqualified_by_evidence": True,
+            "disqualification_reason": "B2C retail",
+            "qualified_by_evidence": False,
+            "reasoning": ["Evidence shows consumer retail store."],
+            "fit": "UNCERTAIN",
+            "confidence": 0.98,
+            "key_signals_used": ["HTTP_WEBSITE"],
+        })
+
+    # Invalid Case 5: Qualified=True but fit=UNCERTAIN (Must reject)
+    with pytest.raises(ValueError, match="qualified_by_evidence is True, so fit MUST be YES"):
+        StructuredLLMVerdict.model_validate({
+            "disqualified_by_evidence": False,
+            "qualified_by_evidence": True,
+            "qualification_reason": "Enterprise AI developer platform",
+            "reasoning": ["Evidence shows enterprise APIs."],
+            "fit": "UNCERTAIN",
+            "confidence": 0.88,
+            "key_signals_used": ["HTTP_WEBSITE"],
+        })
+
+    # Invalid Case 6: UNCERTAIN with high confidence (Must reject)
+    with pytest.raises(ValueError, match="UNCERTAIN verdict must have confidence < 0.50"):
+        StructuredLLMVerdict.model_validate({
+            "disqualified_by_evidence": False,
+            "qualified_by_evidence": False,
+            "reasoning": ["Evidence is inconclusive."],
+            "fit": "UNCERTAIN",
+            "confidence": 0.85,
+            "key_signals_used": [],
+        })

@@ -7,11 +7,32 @@ from app.database.enums import FitDecision
 
 
 class StructuredLLMVerdict(BaseModel):
-    """Strict structured output contract for evidence-grounded company fit judgments."""
+    """Strict structured output contract for evidence-grounded company fit judgments with explicit precedence."""
 
+    disqualified_by_evidence: bool = Field(
+        default=False,
+        description="True if verified evidence establishes a disqualifying business model/category (e.g. B2C e-commerce, consumer retail, fashion/clothing retail, groceries, consumer marketplace, physical goods, agency, parked domain)."
+    )
+    disqualification_reason: Optional[str] = Field(
+        default=None,
+        description="Specific citation from evidence explaining why company is disqualified, or null."
+    )
+    qualified_by_evidence: bool = Field(
+        default=False,
+        description="True if verified evidence establishes target B2B software, enterprise tech, developer platforms/APIs, AI/ML infrastructure, or enterprise SaaS."
+    )
+    qualification_reason: Optional[str] = Field(
+        default=None,
+        description="Specific citation from evidence explaining why company meets target criteria, or null."
+    )
+    reasoning: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of distinct, evidence-grounded deductive statements citing supplied facts"
+    )
     fit: FitDecision = Field(
         ...,
-        description="Categorical decision: YES (meets rubric criteria), NO (disqualified/does not meet), UNCERTAIN (insufficient/ambiguous data)"
+        description="Categorical decision derived strictly by precedence: 1. If disqualified_by_evidence -> NO; 2. Else if qualified_by_evidence -> YES; 3. Else -> UNCERTAIN"
     )
     confidence: float = Field(
         ...,
@@ -22,11 +43,6 @@ class StructuredLLMVerdict(BaseModel):
     confidence_rationale: Optional[str] = Field(
         default=None,
         description="Concise rationale explaining the confidence level assignment"
-    )
-    reasoning: list[str] = Field(
-        ...,
-        min_length=1,
-        description="List of distinct, evidence-grounded deductive statements citing supplied facts"
     )
     follow_up_question: Optional[str] = Field(
         default=None,
@@ -58,14 +74,32 @@ class StructuredLLMVerdict(BaseModel):
         return cls.model_validate(data)
 
     @model_validator(mode="after")
-    def validate_fit_confidence_consistency(self) -> "StructuredLLMVerdict":
+    def validate_fit_consistency_and_precedence(self) -> "StructuredLLMVerdict":
         """
-        Enforce semantic consistency: UNCERTAIN decisions must have confidence < 0.50.
-        Internally inconsistent combinations (e.g. UNCERTAIN with 0.95 confidence)
-        are rejected as invalid model responses rather than silently modified.
+        Enforce decision precedence & semantic consistency:
+        1. If disqualified_by_evidence is True -> fit MUST be NO.
+        2. Else if qualified_by_evidence is True -> fit MUST be YES.
+        3. UNCERTAIN verdict must have confidence < 0.50.
+        4. YES or NO verdict must have confidence >= 0.50.
         """
+        if self.disqualified_by_evidence and self.fit != FitDecision.NO:
+            raise ValueError(
+                f"Inconsistent model response: disqualified_by_evidence is True, so fit MUST be NO (received fit={self.fit.value})."
+            )
+
+        if self.qualified_by_evidence and not self.disqualified_by_evidence and self.fit != FitDecision.YES:
+            raise ValueError(
+                f"Inconsistent model response: qualified_by_evidence is True, so fit MUST be YES (received fit={self.fit.value})."
+            )
+
         if self.fit == FitDecision.UNCERTAIN and self.confidence >= 0.50:
             raise ValueError(
                 f"Inconsistent model response: UNCERTAIN verdict must have confidence < 0.50 (received {self.confidence})."
             )
+
+        if self.fit in (FitDecision.YES, FitDecision.NO) and self.confidence < 0.50:
+            raise ValueError(
+                f"Inconsistent model response: Conclusive {self.fit.value} verdict must have confidence >= 0.50 (received {self.confidence})."
+            )
+
         return self
