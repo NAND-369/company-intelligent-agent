@@ -1083,3 +1083,74 @@ async def test_stale_invalid_verdict_recompute_failure_does_not_surface_invalid_
 
     # 5. Assert get_latest_by_company continues to return None
     assert await VerdictRepository.get_latest_by_company(db_session, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_pipeline_generic_b2c_evidence_evaluates_and_persists_as_no(db_session: AsyncSession) -> None:
+    """
+    End-to-end integration test verifying that generic B2C retail/shopping evidence
+    is evaluated by LLMJudgeService as NO with high confidence, persisted in DB as NO,
+    and surfaced as NO in pipeline run telemetry.
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Global Online Retail Marketplace",
+        website_url="https://global-retail-marketplace.com",
+        sheet_row_id="row_b2c_generic",
+        status=CompanyStatus.PENDING,
+    )
+    company_id = company.id
+    await db_session.commit()
+
+    # Seed generic B2C evidence signals
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company_id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://global-retail-marketplace.com",
+        status=SignalStatus.SUCCESS,
+        extracted_facts={
+            "page_title": "Online Shopping Site for Consumer Lifestyle, Clothing & Footwear",
+            "meta_description": "Top consumer shopping destination for fashion, dresses, shoes, and lifestyle goods.",
+            "headings_summary": ["Best Online Shopping Site", "Fashion Store Discounts", "Customer Orders"],
+            "main_content_snippet": "Direct to consumer online shopping platform with consumer retail products.",
+        },
+    )
+    await db_session.commit()
+
+    from app.llm.client import FakeLLMClient as AppFakeLLMClient
+    llm_service = LLMJudgeService(session=db_session, llm_client=AppFakeLLMClient())
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[company_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=True,
+        )
+    )
+
+    # 1. Verify run telemetry
+    assert run_result.companies_processed == 1
+    assert run_result.companies_succeeded == 1
+    assert len(run_result.company_results) == 1
+    result_item = run_result.company_results[0]
+    assert result_item.status == CompanyStatus.JUDGED
+    assert result_item.fit_decision == FitDecision.NO
+    assert result_item.confidence >= 0.80
+
+    # 2. Verify persisted verdict in PostgreSQL
+    latest_verdict = await VerdictRepository.get_latest_by_company(db_session, company_id)
+    assert latest_verdict is not None
+    assert latest_verdict.fit == FitDecision.NO
+    assert latest_verdict.confidence >= 0.80

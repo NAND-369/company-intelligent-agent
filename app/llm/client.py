@@ -66,23 +66,39 @@ class FakeLLMClient(LLMClient):
         # 1. Missing or failed extraction signals -> UNCERTAIN with low confidence
         if (
             "no evidence signals available" in evidence_text
-            or "failed" in evidence_text
-            or "error" in evidence_text
-            or "404" in evidence_text
             or "signalstatus.failed" in evidence_text
+            or "connection refused" in evidence_text
+            or "mock 404" in evidence_text
+            or "error" in evidence_text
+            or "failed" in evidence_text
         ):
             return json.dumps({
                 "fit": "UNCERTAIN",
-                "confidence": 0.2,
+                "confidence": 0.20,
                 "confidence_rationale": "No factual evidence signals were available for analysis.",
                 "reasoning": ["No verified signals exist in PostgreSQL database for this company."],
                 "follow_up_question": "Can you provide a functional website URL?",
                 "key_signals_used": [],
             })
 
+        # 2. Contradictory evidence (contains both explicit B2C shopping and B2B developer platform) -> UNCERTAIN < 0.50
+        is_b2c = any(w in evidence_text for w in ("fashion", "clothing", "flipkart", "myntra", "retail", "shopping", "b2c", "consumer", "dresses", "shoes", "groceries"))
+        is_b2b = any(w in evidence_text for w in ("developer api", "enterprise security", "developer platform", "robotics", "warehouse fleet"))
+        if is_b2c and is_b2b:
+            return json.dumps({
+                "fit": "UNCERTAIN",
+                "confidence": 0.30,
+                "confidence_rationale": "Evidence contains conflicting signals between consumer marketplace and developer platform.",
+                "reasoning": [
+                    "Website exhibits contradictory indicators of both consumer shopping and enterprise developer tools.",
+                    "Unable to resolve whether primary operating model is B2B or B2C."
+                ],
+                "follow_up_question": "Can you clarify whether the primary business model is enterprise B2B or consumer B2C?",
+                "key_signals_used": ["HTTP_WEBSITE"],
+            })
 
-        # 2. Explicit B2C Consumer Retail / Marketplace in evidence -> NO with high confidence
-        if any(w in evidence_text for w in ("fashion", "clothing", "flipkart", "myntra", "retail", "shopping", "b2c", "consumer")):
+        # 3. Explicit B2C Consumer Retail / Marketplace in evidence -> NO with high confidence
+        if is_b2c:
             return json.dumps({
                 "fit": "NO",
                 "confidence": 0.95,
@@ -95,15 +111,13 @@ class FakeLLMClient(LLMClient):
                 "key_signals_used": ["HTTP_WEBSITE"],
             })
 
-
-
-
+        # 4. Target B2B Enterprise Software / Tech -> YES with high confidence
         return json.dumps({
             "fit": "YES",
             "confidence": 0.88,
             "confidence_rationale": "Strong positive concordance across HTTP and browser careers signals.",
             "reasoning": [
-                "HTTP signal demonstrates an autonomous robotics fleet platform targeting enterprise warehouse hubs.",
+                "HTTP signal demonstrates an autonomous robotics fleet or enterprise platform targeting business customers.",
                 "Browser careers signal confirms 3 active engineering roles (Python, C++, ROS2)."
             ],
             "follow_up_question": None,
@@ -129,11 +143,52 @@ class GeminiLLMClient(LLMClient):
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent"
 
     async def generate_text(self, system_prompt: str, user_prompt: str) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt}]}],
             "generationConfig": {
                 "response_mime_type": "application/json",
+                "response_schema": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "fit": {
+                            "type": "STRING",
+                            "enum": ["YES", "NO", "UNCERTAIN"],
+                            "description": "YES if evidence establishes target B2B software/AI/infrastructure fit; NO if evidence establishes disqualification or consumer retail/e-commerce/non-target business; UNCERTAIN strictly if evidence is genuinely insufficient/inaccessible to identify the business.",
+                        },
+                        "confidence": {
+                            "type": "NUMBER",
+                            "description": "Calibrated confidence score between 0.0 and 1.0 (>= 0.80 for clear YES/NO, < 0.50 for UNCERTAIN)",
+                        },
+                        "confidence_rationale": {
+                            "type": "STRING",
+                            "description": "Concise explanation of the confidence level",
+                        },
+                        "reasoning": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"},
+                            "description": "List of evidence-grounded deductive statements citing facts",
+                        },
+                        "follow_up_question": {
+                            "type": "STRING",
+                            "nullable": True,
+                            "description": "Targeted discovery question if UNCERTAIN, or null if YES/NO",
+                        },
+                        "key_signals_used": {
+                            "type": "ARRAY",
+                            "items": {"type": "STRING"},
+                            "description": "Types of signals referenced in reasoning",
+                        },
+                    },
+                    "required": [
+                        "fit",
+                        "confidence",
+                        "confidence_rationale",
+                        "reasoning",
+                        "follow_up_question",
+                        "key_signals_used",
+                    ],
+                },
             },
         }
         headers = {

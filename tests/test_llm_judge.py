@@ -506,7 +506,9 @@ async def test_gemini_client_header_auth_and_url_safety(monkeypatch: pytest.Monk
     assert captured_request["params"] is None
     assert secret_key not in captured_request["url"]
     assert "/models/gemini-3.1-flash-lite:generateContent" in captured_request["url"]
-    assert captured_request["json"]["generationConfig"] == {"response_mime_type": "application/json"}
+    assert captured_request["json"]["generationConfig"]["response_mime_type"] == "application/json"
+    assert "response_schema" in captured_request["json"]["generationConfig"]
+    assert captured_request["json"]["generationConfig"]["response_schema"]["properties"]["fit"]["enum"] == ["YES", "NO", "UNCERTAIN"]
 
 
 @pytest.mark.asyncio
@@ -661,3 +663,213 @@ async def test_rejected_invalid_llm_output_cannot_be_persisted(db_session: Async
     # Verify no verdict was persisted in database
     persisted = await VerdictRepository.get_latest_by_company(db_session, company.id)
     assert persisted is None
+
+
+# ==============================================================================
+# 6. Generic Decision Invariant Tests (Cases A - E)
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_case_a_generic_b2c_evidence_evaluates_as_no(db_session: AsyncSession) -> None:
+    """
+    CASE A: Generic B2C Evidence
+    title: 'Online Shopping Site for Fashion, Clothing & Accessories'
+    description: 'Consumer fashion marketplace selling shoes, clothing and accessories'
+    headings: ['Best Online Shopping Site', 'Fashion Store']
+    Expected: fit == NO, confidence >= 0.80
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Generic Fashion Store",
+        website_url="https://generic-fashion-store.com",
+        sheet_row_id="row_case_a",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://generic-fashion-store.com",
+        extracted_facts={
+            "page_title": "Online Shopping Site for Fashion, Clothing & Accessories",
+            "meta_description": "Consumer fashion marketplace selling shoes, clothing and accessories",
+            "headings_summary": ["Best Online Shopping Site", "Fashion Store"],
+            "main_content_snippet": "Online retail catalog with consumer apparel, clothing, footwear, and accessories.",
+        },
+    )
+    await db_session.commit()
+
+    service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.NO
+    assert verdict.confidence >= 0.80
+    assert any("retail" in r.lower() or "disqualif" in r.lower() or "consumer" in r.lower() for r in verdict.reasoning)
+
+
+@pytest.mark.asyncio
+async def test_case_b_generic_b2b_evidence_evaluates_as_yes(db_session: AsyncSession) -> None:
+    """
+    CASE B: Generic B2B Evidence
+    title: 'Enterprise AI Developer Platform'
+    description: 'APIs and infrastructure for enterprise developers'
+    headings: ['Developer APIs', 'Enterprise Security', 'Documentation']
+    Expected: fit == YES, confidence >= 0.80
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Generic Dev Platform",
+        website_url="https://generic-dev-platform.io",
+        sheet_row_id="row_case_b",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://generic-dev-platform.io",
+        extracted_facts={
+            "page_title": "Enterprise AI Developer Platform",
+            "meta_description": "APIs and infrastructure for enterprise developers",
+            "headings_summary": ["Developer APIs", "Enterprise Security", "Documentation"],
+            "main_content_snippet": "Cloud infrastructure delivering REST APIs and SDKs for enterprise AI developers.",
+        },
+    )
+    await db_session.commit()
+
+    service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.YES
+    assert verdict.confidence >= 0.80
+
+
+@pytest.mark.asyncio
+async def test_case_c_insufficient_evidence_evaluates_as_uncertain(db_session: AsyncSession) -> None:
+    """
+    CASE C: Insufficient Evidence (HTTP failure, Browser failure, no meaningful description)
+    Expected: fit == UNCERTAIN, confidence < 0.50, follow_up_question present
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Broken Unreachable Site",
+        website_url="https://unreachable-ghost-site.xyz",
+        sheet_row_id="row_case_c",
+        status=CompanyStatus.PENDING,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://unreachable-ghost-site.xyz",
+        status=SignalStatus.FAILED,
+        extracted_facts={"error": "Connection refused (mock 404)"},
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.BROWSER_CAREERS,
+        source_url="https://unreachable-ghost-site.xyz",
+        status=SignalStatus.FAILED,
+        extracted_facts={"error": "Navigation timed out"},
+    )
+    await db_session.commit()
+
+    service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.UNCERTAIN
+    assert verdict.confidence < 0.50
+    assert verdict.follow_up_question is not None
+
+
+@pytest.mark.asyncio
+async def test_case_d_contradictory_evidence_evaluates_as_uncertain(db_session: AsyncSession) -> None:
+    """
+    CASE D: Contradictory Evidence ('consumer shopping marketplace' AND 'enterprise developer api platform')
+    Expected: fit == UNCERTAIN, confidence < 0.50
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Conflicted Identity Corp",
+        website_url="https://conflicted-identity.com",
+        sheet_row_id="row_case_d",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://conflicted-identity.com",
+        extracted_facts={
+            "page_title": "Consumer Shopping Marketplace with Enterprise Developer API Platform",
+            "headings_summary": ["Consumer Shopping Cart", "Developer APIs for Enterprise"],
+            "main_content_snippet": "Direct to consumer shopping marketplace combined with enterprise developer platform APIs.",
+        },
+    )
+    await db_session.commit()
+
+    service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.UNCERTAIN
+    assert verdict.confidence < 0.50
+
+
+@pytest.mark.asyncio
+async def test_case_e_semantic_contradiction_repaired_to_no(db_session: AsyncSession) -> None:
+    """
+    CASE E: Semantic Contradiction Repair
+    A mocked LLM initially returns UNCERTAIN + 0.98 with reasoning establishing consumer e-commerce.
+    Repair prompt instructs it to correct semantics, returning valid NO + 0.95.
+    """
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Contradiction Repair Co",
+        website_url="https://contradiction-repair.com",
+        sheet_row_id="row_case_e",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://contradiction-repair.com",
+        extracted_facts={
+            "page_title": "Online Fashion Retail Store",
+            "main_content_snippet": "Consumer clothing and footwear shopping.",
+        },
+    )
+    await db_session.commit()
+
+    initial_invalid_response = json.dumps({
+        "fit": "UNCERTAIN",
+        "confidence": 0.98,
+        "confidence_rationale": "High confidence it is a consumer fashion platform.",
+        "reasoning": ["Evidence clearly establishes consumer e-commerce marketplace."],
+        "follow_up_question": "Can you provide B2B documentation?",
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    corrected_repaired_response = json.dumps({
+        "fit": "NO",
+        "confidence": 0.95,
+        "confidence_rationale": "Repaired: Disqualifying consumer fashion e-commerce marketplace.",
+        "reasoning": ["Evidence clearly establishes disqualifying consumer e-commerce operations."],
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    fake_client = FakeLLMClient(responses=[initial_invalid_response, corrected_repaired_response])
+    service = LLMJudgeService(session=db_session, llm_client=fake_client)
+
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.NO
+    assert verdict.confidence == 0.95
+    assert len(fake_client.call_history) == 2  # 1 initial call + 1 repair call
