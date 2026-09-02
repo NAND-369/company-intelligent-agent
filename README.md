@@ -380,17 +380,18 @@ Docker Container ──▶ Render / Koyeb / Fly.io ──▶ Public HTTPS Endpoi
 | `APP_ENV` | Yes | `development` | Runtime environment (`development`, `production`). |
 | `PORT` | No | `8000` | HTTP port for Uvicorn web server. |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`). |
-| `API_KEY` | Yes (prod) | `dev-insecure-key` | Secret key for authenticating protected API endpoints. |
+| `X_API_KEY` (or `API_KEY`) | **Required in Prod** | `dev-insecure-key` | Master secret key for external API requests, curl, and Swagger (`X_API_KEY=<random API key>`). |
+| `SESSION_SECRET` | **Required in Prod** | `dev-insecure-session-secret` | Independent secret for signing HttpOnly dashboard session cookies (`SESSION_SECRET=<different random secret>`). |
 | `DATABASE_URL` | Yes | N/A | PostgreSQL async connection string. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON`| Yes | N/A | Full Google Service Account credentials JSON string. |
-| `GOOGLE_SHEET_ID` | Yes | N/A | Spreadsheet ID from the Google Sheet URL. |
-| `GOOGLE_SHEET_WORKSHEET_NAME`| No | `Sheet1` | Target worksheet tab name. |
-| `LLM_PROVIDER` | No | `gemini` | LLM backend: `gemini`, `groq`, or `openai`. |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`| Yes | N/A | Spreadsheet ID from the Google Sheet URL. |
+| `GOOGLE_SHEETS_WORKSHEET_NAME`| No | `Companies` | Target worksheet tab name. |
+| `GOOGLE_SERVICE_ACCOUNT_INFO` | If OAuth/SA | N/A | Full Google Service Account credentials JSON string. |
+| `LLM_PROVIDER` | No | `gemini` | LLM backend: `gemini`, `groq`, `openai`, or `fake`. |
 | `GEMINI_API_KEY` | If Gemini | N/A | Free-tier Google AI Studio API key. |
-| `GROQ_API_KEY` | If Groq | N/A | Free-tier Groq Cloud API key. |
-| `OPENAI_API_KEY` | If OpenAI | N/A | OpenAI API key. |
-| `MAX_CONCURRENT_BROWSERS` | No | `2` | Max concurrent Playwright instances (RAM protection). |
-| `RUBRIC_CONFIG_PATH` | No | `config/rubric.yaml` | Path to evaluation rubric configuration. |
+| `PIPELINE_MAX_CONCURRENCY` | No | `3` | Max concurrent candidate processing tasks. |
+| `RUBRIC_PATH` | No | `config/rubric.yaml` | Path to evaluation rubric configuration. |
+
+
 
 ---
 

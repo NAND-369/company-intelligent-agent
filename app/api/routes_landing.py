@@ -1,9 +1,13 @@
 """Public root interactive demo dashboard for Company Intelligence Agent."""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from fastapi.responses import HTMLResponse
 
+from app.api.auth import SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, create_session_token
+from app.config.settings import get_settings
+
 router = APIRouter(tags=["Landing"])
+
 
 LANDING_PAGE_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -781,7 +785,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         Production &bull; Online
       </div>
       <div class="nav-links">
-        <button id="apiKeyBtn" class="key-btn" onclick="promptApiKey()">API Key</button>
         <a href="/docs" class="nav-link">Docs</a>
         <a href="/health" class="nav-link">Health</a>
       </div>
@@ -1126,43 +1129,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     let activePollingInterval = null;
     let sessionCompanies = [];
 
-    function getApiKey() {
-      return localStorage.getItem('agent_api_key') || '';
-    }
-
-    function promptApiKey() {
-      const current = getApiKey();
-      const nextKey = prompt('Enter X-API-Key for protected operations (leave blank if local/unconfigured):', current);
-      if (nextKey !== null) {
-        if (nextKey.trim()) {
-          localStorage.setItem('agent_api_key', nextKey.trim());
-        } else {
-          localStorage.removeItem('agent_api_key');
-        }
-        updateApiKeyButton();
-      }
-    }
-
-    function updateApiKeyButton() {
-      const btn = document.getElementById('apiKeyBtn');
-      if (getApiKey()) {
-        btn.innerText = 'Key: Configured';
-        btn.style.borderColor = 'var(--accent)';
-        btn.style.color = 'var(--accent)';
-      } else {
-        btn.innerText = 'Set API Key';
-        btn.style.borderColor = 'var(--border)';
-        btn.style.color = 'var(--text-secondary)';
-      }
-    }
-
     function getHeaders() {
-      const headers = { 'Content-Type': 'application/json' };
-      const key = getApiKey();
-      if (key) {
-        headers['X-API-Key'] = key;
-      }
-      return headers;
+      return { 'Content-Type': 'application/json' };
     }
 
     async function checkHealth() {
@@ -1319,7 +1287,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
         if (res.status === 401) {
           notice.className = 'alert-box error';
-          notice.innerText = 'Authentication required. Click "Set API Key" above to configure your key.';
+          notice.innerText = 'Authentication session expired or invalid. Please refresh the page.';
           notice.style.display = 'block';
           return;
         }
@@ -1495,7 +1463,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
         if (res.status === 401) {
           notice.className = 'alert-box error';
-          notice.innerText = 'Authentication required. Click "Set API Key" above to configure your key.';
+          notice.innerText = 'Authentication session expired or invalid. Please refresh the page.';
           notice.style.display = 'block';
           return;
         }
@@ -1576,7 +1544,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         });
 
         if (res.status === 401) {
-          alert('Authentication required. Click "Set API Key" on top right.');
+          alert('Authentication session expired or invalid. Please refresh the page.');
           btn.disabled = false;
           btn.innerText = 'RUN PIPELINE';
           monitor.style.display = 'none';
@@ -1753,7 +1721,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', () => {
-      updateApiKeyButton();
       checkHealth();
       renderSessionCompanies();
     });
@@ -1771,5 +1738,19 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     include_in_schema=False,
 )
 async def landing_page() -> HTMLResponse:
-    """Render public HTML landing page and interactive demo dashboard for the deployed agent."""
-    return HTMLResponse(content=LANDING_PAGE_HTML, status_code=status.HTTP_200_OK)
+    """Render public HTML landing page and issue secure dashboard session cookie."""
+    settings = get_settings()
+    session_token = create_session_token(settings)
+    is_prod = settings.app_env == "production"
+
+    response = HTMLResponse(content=LANDING_PAGE_HTML, status_code=status.HTTP_200_OK)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=is_prod,
+        path="/",
+    )
+    return response

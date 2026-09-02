@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from typing import Literal, Optional
-from pydantic import Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,8 +23,28 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, alias="PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    # API Security
-    api_key: str = Field(default="dev-insecure-key", alias="API_KEY")
+    # API Security & Server-Side Session Auth (Strictly Separated Security Domains)
+    api_key: str = Field(
+        default="dev-insecure-key",
+        validation_alias=AliasChoices("X_API_KEY", "API_KEY"),
+    )
+    session_secret: str = Field(
+        default="dev-insecure-session-secret",
+        alias="SESSION_SECRET",
+    )
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Enforce strict secret independence and configuration in production."""
+        if self.app_env == "production":
+            if self.api_key == "dev-insecure-key":
+                raise ValueError("In production, X_API_KEY must be configured with a secure key.")
+            if self.session_secret == "dev-insecure-session-secret":
+                raise ValueError("In production, SESSION_SECRET must be configured with a dedicated secret key.")
+            if self.api_key == self.session_secret:
+                raise ValueError("X_API_KEY and SESSION_SECRET must be independent, distinct secrets.")
+        return self
+
 
     # Database Configuration (PostgreSQL)
     database_url: str = Field(

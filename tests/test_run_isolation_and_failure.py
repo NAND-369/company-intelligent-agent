@@ -509,6 +509,12 @@ async def test_landing_page_html_starts_with_empty_companies_and_no_historical_s
     assert "renderHistoricalVerdicts" not in html
     assert "loadCompanies()" not in html
 
+    # Verify no master API key / localStorage handling exists in HTML
+    assert "agent_api_key" not in html
+    assert "promptApiKey" not in html
+    assert "localStorage" not in html
+
+
 
 # ==============================================================================
 # 11. Pipeline Scoped Exclusively to Explicit Company IDs

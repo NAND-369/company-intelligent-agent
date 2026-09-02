@@ -21,15 +21,18 @@ The **Company Intelligence Agent REST API** provides a lightweight, purposeful H
 
 ## 2. Authentication & Authorization
 
-All administrative and data endpoints are protected via an API Key mechanism.
+All data and pipeline endpoints are protected via a dual-mode server-side authentication system:
 
-| Mechanism | Header Format | Description |
+| Client Type | Authentication Mechanism | Description |
 | :--- | :--- | :--- |
-| **API Key Header** | `X-API-Key: <SECRET_KEY>` | Primary authentication header validated against `API_KEY` configured in `.env`. |
-| **Bearer Token (Fallback)** | `Authorization: Bearer <SECRET_KEY>` | Standard Bearer token alternative for automated HTTP clients. |
+| **Interactive Dashboard** | `Cookie: cia_session=<TOKEN>` | Automatic `HttpOnly`, `SameSite=Lax` session cookie signed via independent `SESSION_SECRET`. Master `X_API_KEY` is never exposed to frontend JavaScript or stored in `localStorage`. |
+| **External Clients / Swagger / CI** | `X-API-Key: <SECRET_KEY>` | Primary header validated in constant time against independent `X_API_KEY` (or `API_KEY`). |
+| **Bearer Token Alternative** | `Authorization: Bearer <SECRET_KEY>` | Standard Bearer token alternative for automated HTTP clients and scripts. |
 
 > [!NOTE]
-> `GET /health` is the **only public endpoint** that does not require authentication, allowing cloud platform uptime checkers to probe service health.
+> `GET /` and `GET /health` are public endpoints. In production, `X_API_KEY=<random key>` and `SESSION_SECRET=<different random secret>` are strictly required independent variables.
+
+
 
 ---
 
