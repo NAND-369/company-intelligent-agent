@@ -1097,8 +1097,20 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           </div>
         </div>
       </div>
+  <!-- EXISTING RESULT MODAL -->
+  <div id="existingResultModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); z-index: 1000; align-items: center; justify-content: center; padding: 1.5rem;">
+    <div style="background: var(--bg); border: 2px solid var(--text-main); max-width: 820px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+        <div>
+          <div class="label-meta label-accent">EXISTING EVALUATION RECORD</div>
+          <h3 id="modalCoName" style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin-top: 0.25rem;">Company Name</h3>
+          <a id="modalCoUrl" href="#" target="_blank" class="mono-text" style="font-size: 13px; color: var(--text-secondary); text-decoration: underline;"></a>
+        </div>
+        <button class="key-btn" onclick="closeExistingResultModal()" style="font-size: 13px; padding: 0.5rem 1rem;">&times; CLOSE</button>
+      </div>
+      <div id="modalContent"></div>
     </div>
-  </section>
+  </div>
 
   <!-- FOOTER -->
   <footer>
@@ -1332,6 +1344,117 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
     }
 
+    function closeExistingResultModal() {
+      const modal = document.getElementById('existingResultModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function viewExistingCompanyResult(companyId) {
+      const modal = document.getElementById('existingResultModal');
+      const modalContent = document.getElementById('modalContent');
+      const modalCoName = document.getElementById('modalCoName');
+      const modalCoUrl = document.getElementById('modalCoUrl');
+
+      modal.style.display = 'flex';
+      modalContent.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 2rem 0; text-align: center;">Loading existing company evaluation...</div>`;
+
+      try {
+        const res = await fetch(`/companies/${companyId}`, { headers: getHeaders() });
+        if (!res.ok) {
+          modalContent.innerHTML = `<div class="alert-box error" style="display:block;">Failed to fetch company details (${res.status}).</div>`;
+          return;
+        }
+        const data = await res.json();
+        modalCoName.innerText = data.name || 'Company';
+        modalCoUrl.innerText = data.website_url || '';
+        modalCoUrl.href = data.website_url || '#';
+
+        if (!data.latest_verdict || !data.latest_verdict.fit) {
+          modalContent.innerHTML = `
+            <div style="padding: 2rem 0; text-align: center;">
+              <div class="mono-text" style="font-size: 14px; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.5rem;">No result available yet.</div>
+              <div class="mono-text" style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.5rem;">The company is currently status: <span class="badge badge-pending">${escapeHtml(data.status)}</span></div>
+              <button type="button" class="btn btn-primary" onclick="closeExistingResultModal(); recomputeExistingCompany('${data.id}', '${escapeHtml(data.name)}', '${escapeHtml(data.website_url)}');">🔄 RECOMPUTE COMPANY</button>
+            </div>
+          `;
+          return;
+        }
+
+        const v = data.latest_verdict;
+        const fit = v.fit || 'UNCERTAIN';
+        let fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
+        if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
+        else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
+
+        const conf = (v.confidence !== null && v.confidence !== undefined) ? `${Math.round(v.confidence * 100)}%` : '—';
+        const reasoningItems = Array.isArray(v.reasoning) ? v.reasoning : (v.reasoning ? [v.reasoning] : []);
+
+        modalContent.innerHTML = `
+          <div class="verdict-card" style="margin-top: 0; background: #ffffff;">
+            <div class="verdict-decision-grid">
+              <div>
+                <div class="verdict-block-title">DECISION</div>
+                <div>${fitBadge}</div>
+              </div>
+              <div>
+                <div class="verdict-block-title">CONFIDENCE</div>
+                <div class="mono-text" style="font-size: 22px; font-weight: 800;">${conf}</div>
+                ${v.confidence_rationale ? `<div class="mono-text" style="font-size: 11px; color: var(--text-secondary); margin-top: 0.25rem;">${escapeHtml(v.confidence_rationale)}</div>` : ''}
+              </div>
+              <div>
+                <div class="verdict-block-title">EVIDENCE REASONING</div>
+                <ul class="reasoning-list">
+                  ${reasoningItems.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+
+            ${v.follow_up_question ? `
+              <div class="followup-box" style="margin-top: 1rem;">
+                <span class="mono-text" style="font-size:10px; font-weight:700; letter-spacing:0.15em; color:var(--accent); display:block; margin-bottom:0.25rem;">SUGGESTED DISCOVERY FOLLOW-UP:</span>
+                ${escapeHtml(v.follow_up_question)}
+              </div>
+            ` : ''}
+
+            <div style="margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <span class="mono-text" style="font-size: 11px; color: var(--text-muted);">Evaluated: ${v.evaluated_at ? new Date(v.evaluated_at).toLocaleString() : 'N/A'}</span>
+              <button type="button" class="btn btn-primary" onclick="closeExistingResultModal(); recomputeExistingCompany('${data.id}', '${escapeHtml(data.name)}', '${escapeHtml(data.website_url)}');">🔄 RECOMPUTE</button>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        modalContent.innerHTML = `<div class="alert-box error" style="display:block;">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function recomputeExistingCompany(companyId, companyName, companyUrl) {
+      // 1. Add to session working list if not present, or reset status to PENDING
+      let co = sessionCompanies.find(c => c.id === companyId);
+      if (!co) {
+        co = {
+          id: companyId,
+          name: companyName,
+          website_url: companyUrl,
+          status: 'PENDING',
+          fit: '—',
+          confidence: '—',
+        };
+        sessionCompanies.push(co);
+      } else {
+        co.status = 'PENDING';
+        co.fit = '—';
+        co.confidence = '—';
+      }
+      renderSessionCompanies();
+
+      // 2. Hide notice
+      const notice = document.getElementById('addCompanyNotice');
+      if (notice) notice.style.display = 'none';
+
+      // 3. Trigger pipeline explicitly for this company with force_reprocess
+      await triggerPipelineRunForCompanies([companyId], true);
+    }
+
     async function handleAddCompany(e) {
       e.preventDefault();
       const btn = document.getElementById('addCompBtn');
@@ -1342,12 +1465,18 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       if (!name || !website_url) return;
 
       // 1. Check if duplicate in current working list
-      const duplicateInSession = sessionCompanies.some(
+      const existingInSession = sessionCompanies.find(
         c => c.name.toLowerCase() === name.toLowerCase() || c.website_url.toLowerCase() === website_url.toLowerCase()
       );
-      if (duplicateInSession) {
+      if (existingInSession) {
         notice.className = 'alert-box error';
-        notice.innerText = `${name} already exists`;
+        notice.innerHTML = `
+          <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(existingInSession.name)} already exists.</div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+            <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${existingInSession.id}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
+            <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${existingInSession.id}', '${escapeHtml(existingInSession.name)}', '${escapeHtml(existingInSession.website_url)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
+          </div>
+        `;
         notice.style.display = 'block';
         return;
       }
@@ -1388,8 +1517,19 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           notice.style.display = 'block';
           document.getElementById('addCompanyForm').reset();
         } else if (res.status === 409) {
+          const errDetails = (data.error && data.error.details) || {};
+          const dupId = errDetails.company_id || (data.detail && data.detail.company_id) || '';
+          const dupName = errDetails.name || name;
+          const dupUrl = errDetails.website_url || website_url;
+
           notice.className = 'alert-box error';
-          notice.innerText = `${name} already exists`;
+          notice.innerHTML = `
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(dupName)} already exists.</div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+              <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${dupId}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
+              <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${dupId}', '${escapeHtml(dupName)}', '${escapeHtml(dupUrl)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
+            </div>
+          `;
           notice.style.display = 'block';
         } else {
           notice.className = 'alert-box error';
@@ -1406,26 +1546,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
     }
 
-    async function triggerPipelineRun() {
+    async function triggerPipelineRunForCompanies(companyIds, forceReprocess = false) {
       const btn = document.getElementById('runPipelineBtn');
-      const forceReprocess = document.getElementById('forceReprocessCheckbox').checked;
-
-      if (sessionCompanies.length === 0) {
-        const monitor = document.getElementById('pipelineMonitor');
-        monitor.style.display = 'block';
-        document.getElementById('syncConfirmationBanner').style.display = 'none';
-        document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
-        document.getElementById('runStatusBadge').innerText = 'NO COMPANIES';
-        document.getElementById('runIdDisplay').innerText = 'No companies added to the current working list.';
-        document.getElementById('metricDiscovered').innerText = 0;
-        document.getElementById('metricProcessed').innerText = 0;
-        document.getElementById('metricSuccess').innerText = 0;
-        document.getElementById('metricSynced').innerText = 0;
-        document.getElementById('metricDecisions').innerText = '—';
-        renderLatestRunResults([], { processed_count: 0 });
-        return;
-      }
-
       btn.disabled = true;
       btn.innerText = 'DISPATCHING...';
 
@@ -1434,7 +1556,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       document.getElementById('syncConfirmationBanner').style.display = 'none';
       document.getElementById('runStatusBadge').className = 'monitor-status status-running';
       document.getElementById('runStatusBadge').innerText = 'STARTING...';
-      document.getElementById('runIdDisplay').innerText = 'Initializing run...';
+      document.getElementById('runIdDisplay').innerText = `Initializing run for ${companyIds.length} company/companies...`;
 
       setStageState('stageDiscovery', 'active');
       setStageState('stageEnrichment', '');
@@ -1447,7 +1569,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           method: 'POST',
           headers: getHeaders(),
           body: JSON.stringify({
-            company_ids: sessionCompanies.map(c => c.id),
+            company_ids: companyIds,
             sync_to_sheets: true,
             force_reprocess: forceReprocess,
           }),
@@ -1479,6 +1601,28 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         btn.disabled = false;
         btn.innerText = 'RUN PIPELINE';
       }
+    }
+
+    async function triggerPipelineRun() {
+      const forceReprocess = document.getElementById('forceReprocessCheckbox').checked;
+
+      if (sessionCompanies.length === 0) {
+        const monitor = document.getElementById('pipelineMonitor');
+        monitor.style.display = 'block';
+        document.getElementById('syncConfirmationBanner').style.display = 'none';
+        document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
+        document.getElementById('runStatusBadge').innerText = 'NO COMPANIES';
+        document.getElementById('runIdDisplay').innerText = 'No companies added to the current working list.';
+        document.getElementById('metricDiscovered').innerText = 0;
+        document.getElementById('metricProcessed').innerText = 0;
+        document.getElementById('metricSuccess').innerText = 0;
+        document.getElementById('metricSynced').innerText = 0;
+        document.getElementById('metricDecisions').innerText = '—';
+        renderLatestRunResults([], { processed_count: 0 });
+        return;
+      }
+
+      await triggerPipelineRunForCompanies(sessionCompanies.map(c => c.id), forceReprocess);
     }
 
     function setStageState(elementId, state) {

@@ -65,9 +65,55 @@ def test_structured_verdict_empty_reasoning_rejected() -> None:
     with pytest.raises(ValidationError):
         StructuredLLMVerdict(
             fit=FitDecision.UNCERTAIN,
-            confidence=0.5,
+            confidence=0.3,
             reasoning=[],  # Empty
         )
+
+
+def test_structured_verdict_rejects_uncertain_with_high_confidence() -> None:
+    """Test that UNCERTAIN decision with high confidence (>= 0.50) is rejected by validation."""
+    with pytest.raises(ValidationError) as exc_info:
+        StructuredLLMVerdict(
+            fit=FitDecision.UNCERTAIN,
+            confidence=0.95,  # Inconsistent with UNCERTAIN
+            reasoning=["Sparse ambiguous information."],
+            follow_up_question="What is the primary customer base?",
+        )
+    assert "UNCERTAIN verdict must have confidence < 0.50" in str(exc_info.value)
+
+
+def test_structured_verdict_accepts_valid_uncertain_low_confidence() -> None:
+    """Test that valid UNCERTAIN decision with low confidence passes validation."""
+    verdict = StructuredLLMVerdict(
+        fit=FitDecision.UNCERTAIN,
+        confidence=0.35,
+        reasoning=["Insufficient product details available on landing page."],
+        follow_up_question="What is the company's core product offering?",
+    )
+    assert verdict.fit == FitDecision.UNCERTAIN
+    assert verdict.confidence == 0.35
+
+
+def test_structured_verdict_preserves_yes_high_confidence() -> None:
+    """Test that YES decision retains high confidence (e.g. 0.95)."""
+    verdict = StructuredLLMVerdict(
+        fit=FitDecision.YES,
+        confidence=0.95,
+        reasoning=["B2B AI developer platform with enterprise APIs."],
+    )
+    assert verdict.fit == FitDecision.YES
+    assert verdict.confidence == 0.95
+
+
+def test_structured_verdict_preserves_no_high_confidence() -> None:
+    """Test that NO decision retains high confidence."""
+    verdict = StructuredLLMVerdict(
+        fit=FitDecision.NO,
+        confidence=0.90,
+        reasoning=["Direct-to-consumer fashion boutique with physical retail only."],
+    )
+    assert verdict.fit == FitDecision.NO
+    assert verdict.confidence == 0.90
 
 
 # ==============================================================================
@@ -291,7 +337,99 @@ async def test_llm_judge_insufficient_evidence_verdict(db_session: AsyncSession)
 
     assert verdict is not None
     assert verdict.fit == FitDecision.UNCERTAIN
-    assert verdict.confidence <= 0.30
+    assert verdict.confidence <= 0.40
+    assert verdict.follow_up_question is not None
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_b2b_ai_developer_infra_evaluates_yes(db_session: AsyncSession) -> None:
+    """Test evaluation of B2B AI model API / developer platform (e.g. Sarvam)."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Sarvam AI",
+        website_url="https://www.sarvam.ai",
+        sheet_row_id="row_sarvam_test",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://www.sarvam.ai",
+        extracted_facts={
+            "page_title": "Sarvam AI - Enterprise Generative AI Platform & Developer APIs",
+            "headings_summary": [
+                "Generative AI Models for Indian Languages",
+                "Developer Documentation & REST API",
+                "Enterprise AI Solutions & SDK",
+            ],
+            "main_content_snippet": "Sarvam provides production-grade LLM APIs, Python SDKs, and enterprise developer tools for full-stack AI deployment.",
+        },
+    )
+    await db_session.commit()
+
+    sarvam_response = json.dumps({
+        "fit": "YES",
+        "confidence": 0.95,
+        "confidence_rationale": "Clear B2B AI model infrastructure with developer APIs and enterprise offerings.",
+        "reasoning": [
+            "Sarvam operates a B2B platform providing AI model APIs and developer tools.",
+            "Website specifically targets developers with a Python SDK and REST endpoints.",
+        ],
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    fake_client = FakeLLMClient(responses=[sarvam_response])
+    service = LLMJudgeService(session=db_session, llm_client=fake_client)
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.YES
+    assert verdict.confidence == 0.95
+    assert len(verdict.reasoning) >= 1
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_contradictory_evidence_evaluates_uncertain(db_session: AsyncSession) -> None:
+    """Test evaluation when signals contain contradictory evidence."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Mixed Signals Co",
+        website_url="https://mixed-signals.io",
+        sheet_row_id="row_mixed_test",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://mixed-signals.io",
+        extracted_facts={
+            "page_title": "Enterprise Cloud Logistics OR Local Shoe Store",
+            "main_content_snippet": "Contradictory information claiming to be both an enterprise AI backend and a retail shoe shop.",
+        },
+    )
+    await db_session.commit()
+
+    contradictory_response = json.dumps({
+        "fit": "UNCERTAIN",
+        "confidence": 0.35,
+        "confidence_rationale": "Evidence presents conflicting B2B and consumer retail claims.",
+        "reasoning": [
+            "Website claims enterprise cloud backend but primary business appears to be a physical shoe retailer.",
+        ],
+        "follow_up_question": "Does the company primarily sell consumer retail goods or enterprise software?",
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    fake_client = FakeLLMClient(responses=[contradictory_response])
+    service = LLMJudgeService(session=db_session, llm_client=fake_client)
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.UNCERTAIN
+    assert verdict.confidence <= 0.40
     assert verdict.follow_up_question is not None
 
 

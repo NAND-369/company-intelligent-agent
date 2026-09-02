@@ -61,12 +61,22 @@ class CompanyProcessor:
         company_name = company.name
         company_url = company.website_url
 
+        # Check if company had a previously established valid verdict before this processing run
+        had_prior_verdict = False
+        prior_status = company.status
+        try:
+            prior_verdict = await VerdictRepository.get_latest_by_company(self.session, company_id)
+            had_prior_verdict = prior_verdict is not None and prior_verdict.fit is not None
+        except Exception:
+            had_prior_verdict = False
+
         logger.info(
-            "Processing company '%s' (id=%s, current_status=%s, force=%s)",
+            "Processing company '%s' (id=%s, current_status=%s, force=%s, had_prior_verdict=%s)",
             company_name,
             company_id,
             company.status,
             force_reprocess,
+            had_prior_verdict,
         )
 
         try:
@@ -88,22 +98,23 @@ class CompanyProcessor:
                         duration_ms=duration_ms,
                     )
 
-            # 2. Check existing signals to avoid re-extracting
+            # 2. Check existing signals to avoid redundant re-extracting unless force_reprocess is requested
             existing_signals = await SignalRepository.list_by_company(self.session, company_id)
             has_http_signal = any(s.signal_type == SignalType.HTTP_WEBSITE for s in existing_signals)
             has_browser_signal = any(s.signal_type == SignalType.BROWSER_CAREERS for s in existing_signals)
 
             # Step A: HTTP website enrichment
-            if not has_http_signal:
-                logger.info("Executing HTTP enrichment for '%s'", company_name)
+            if force_reprocess or not has_http_signal:
+                logger.info("Executing HTTP enrichment for '%s' (force=%s)", company_name, force_reprocess)
                 await self.http_enrichment_service.enrich_company(company_id)
 
             # Step B: Browser careers enrichment with bounded timeout
-            if self.enable_browser and not has_browser_signal:
+            if self.enable_browser and (force_reprocess or not has_browser_signal):
                 logger.info(
-                    "Executing Browser enrichment for '%s' (timeout=%.1fs)",
+                    "Executing Browser enrichment for '%s' (timeout=%.1fs, force=%s)",
                     company_name,
                     self.browser_timeout_seconds,
+                    force_reprocess,
                 )
                 try:
                     await asyncio.wait_for(
@@ -156,13 +167,25 @@ class CompanyProcessor:
             logger.error("Error processing company '%s' (id=%s): %s", company_name, company_id, exc)
             try:
                 await self.session.rollback()
-                # On definitive failure (LLM failure, 429, timeout, malformed JSON, etc.), completely remove the company
-                # and all its associated partial signals/verdicts/sync logs so no failed/incomplete records remain in PostgreSQL.
-                await CompanyRepository.delete(self.session, company_id)
-                await self.session.commit()
-                logger.info("Successfully deleted failed company '%s' (id=%s) from PostgreSQL.", company_name, company_id)
+                if had_prior_verdict:
+                    # Existing company with previous valid verdict being recomputed.
+                    # Preserve the existing Company row and its previous verdict; release lease.
+                    revert_status = prior_status if prior_status != CompanyStatus.PROCESSING else CompanyStatus.JUDGED
+                    await CompanyRepository.update_status(self.session, company_id, revert_status)
+                    await CompanyRepository.release_lease(self.session, company_id)
+                    await self.session.commit()
+                    logger.info(
+                        "Preserved existing company '%s' (id=%s) and previous verdict after recomputation error.",
+                        company_name,
+                        company_id,
+                    )
+                else:
+                    # Brand-new company evaluation failed technically. Cleanly delete the partial company and records.
+                    await CompanyRepository.delete(self.session, company_id)
+                    await self.session.commit()
+                    logger.info("Successfully deleted failed new company '%s' (id=%s) from PostgreSQL.", company_name, company_id)
             except Exception as db_err:
-                logger.error("Failed to delete company %s on error: %s", company_name, db_err)
+                logger.error("Failed cleanup for company %s on error: %s", company_name, db_err)
 
             return PipelineCompanyResult(
                 company_id=company_id,

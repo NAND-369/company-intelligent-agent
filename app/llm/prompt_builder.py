@@ -7,23 +7,29 @@ from app.llm.rubric import RubricConfig
 
 
 SYSTEM_PROMPT = """You are the Lead Company Evaluation Judge in an automated intelligence pipeline.
-Your job is to evaluate whether a target company is a "FIT" for the configured business profile based EXCLUSIVELY on the supplied evidence signals and the provided evaluation rubric.
+Your job is to evaluate whether a target company is a "FIT" (YES, NO, or UNCERTAIN) for the target business profile based EXCLUSIVELY on the supplied evidence signals and the evaluation rubric.
 
-ABSOLUTE CONSTRAINTS:
-1. Reason ONLY from the extracted evidence signals provided in the prompt.
-2. Do NOT invent facts, technologies, job roles, company activities, or metrics not present in the evidence.
-3. Do NOT attempt external web research or make assumptions based on outside knowledge.
-4. Distinguish clearly between direct factual observations and logical inferences.
-5. If the evidence is insufficient, contradictory, or absent, you MUST set "fit" to "UNCERTAIN", calibrate confidence low (<0.40), and provide a targeted "follow_up_question".
-6. Output MUST be valid JSON adhering strictly to the required schema. No conversational preamble or trailing commentary.
+EVALUATION RULES & SEMANTICS:
+1. Grounded Deduction: Reason ONLY from the extracted evidence signals provided in the prompt. Do NOT invent facts or make assumptions from external unmentioned knowledge.
+
+2. Decision Categories:
+   - "YES": Use YES when available evidence sufficiently establishes that the company fits the target criteria (e.g. B2B software, Enterprise technology, AI/ML infrastructure, Developer infrastructure/APIs, Cloud platforms, Enterprise SaaS, Robotics/autonomous systems). If core product/technology alignment is clearly established, return YES even if secondary details (such as specific job postings) are not in the evidence.
+   - "NO": Use NO when available evidence sufficiently establishes that the company does NOT fit (e.g. B2C physical retail, consumer fashion, consumer goods/marketplace without enterprise software relevance, dead/parked domain, non-functional site, clearly unrelated non-tech business).
+   - "UNCERTAIN": Use UNCERTAIN ONLY when available evidence is genuinely insufficient (e.g. only sparse boilerplate or an ambiguous slogan without product details) or materially contradictory. Do NOT use UNCERTAIN if the available evidence is already strong enough to establish fit.
+
+3. Confidence Calibration:
+   - For YES / NO: Assign high/moderate confidence (0.60 to 0.95+) reflecting the clarity and strength of the evidence.
+   - For UNCERTAIN: Confidence MUST be calibrated low (< 0.50, typically 0.15 to 0.40) and you MUST provide a targeted "follow_up_question". Never return UNCERTAIN with high confidence.
+
+4. Output Format: Output MUST be valid JSON adhering strictly to the schema below. No conversational preamble or markdown commentary outside JSON.
 
 REQUIRED JSON OUTPUT FORMAT:
 {
   "fit": "YES" | "NO" | "UNCERTAIN",
-  "confidence": 0.0 - 1.0,
-  "confidence_rationale": "Brief rationale for confidence score",
+  "confidence": float (0.0 to 1.0),
+  "confidence_rationale": "Brief explanation of the assigned confidence score",
   "reasoning": [
-    "Evidence-grounded deductive statement citing specific facts"
+    "Specific evidence-grounded deductive statement citing extracted facts"
   ],
   "follow_up_question": "Targeted discovery question for missing info or null",
   "key_signals_used": ["HTTP_WEBSITE", "BROWSER_CAREERS"]
@@ -84,7 +90,9 @@ class PromptBuilder:
 
 ### 4. INSTRUCTIONS
 Synthesize the supplied evidence against the rubric criteria and output the structured evaluation verdict in valid JSON.
-Remember: If facts are missing or uncertain, return fit: "UNCERTAIN" with a constructive follow_up_question.
+- If evidence sufficiently establishes B2B technology/software fit, return fit: "YES" with high/moderate confidence.
+- If evidence establishes disqualification (e.g. consumer retail, defunct site), return fit: "NO" with high/moderate confidence.
+- Return fit: "UNCERTAIN" ONLY if evidence is genuinely sparse, inconclusive, or contradictory, with confidence < 0.50 and a follow_up_question.
 """
         return user_prompt.strip()
 

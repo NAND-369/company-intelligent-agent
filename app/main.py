@@ -105,13 +105,20 @@ def create_app() -> FastAPI:
             status.HTTP_503_SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
         }
         code = code_map.get(exc.status_code, "HTTP_ERROR")
+        if isinstance(exc.detail, dict):
+            msg = exc.detail.get("message", "HTTP Error")
+            details = exc.detail
+        else:
+            msg = str(exc.detail)
+            details = None
+
         return JSONResponse(
             status_code=exc.status_code,
             content={
                 "error": {
                     "code": code,
-                    "message": exc.detail,
-                    "details": None,
+                    "message": msg,
+                    "details": details,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             },

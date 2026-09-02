@@ -618,7 +618,7 @@ async def test_api_add_company_success_and_duplicate_conflict(
     data2 = res2.json()
     assert data2["name"] == "Atlassian"
 
-    # 3. Add Duplicate Datadog -> 409 Conflict
+    # 3. Add Duplicate Datadog -> 409 Conflict with structured details
     res3 = await async_client.post(
         "/companies",
         json={"name": "Datadog", "website_url": "https://datadoghq.com"},
@@ -628,3 +628,268 @@ async def test_api_add_company_success_and_duplicate_conflict(
     res3_data = res3.json()
     err_msg = res3_data.get("error", {}).get("message") or res3_data.get("detail", "")
     assert "already exists" in err_msg
+    details = res3_data.get("error", {}).get("details")
+    assert details is not None
+    assert details["duplicate"] is True
+    assert details["company_id"] == data1["id"]
+    assert details["has_result"] is False
+
+
+# ==============================================================================
+# 14. Duplicate Company with Existing Verdict Exposes has_result=True
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_api_duplicate_company_with_existing_verdict(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify duplicate returns has_result=True and latest verdict summary when evaluated."""
+    settings = get_settings()
+    headers = {"X-API-Key": settings.api_key}
+
+    # 1. Create and evaluate company
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Sarvam AI",
+        website_url="https://www.sarvam.ai",
+        status=CompanyStatus.JUDGED,
+    )
+    verdict = await VerdictRepository.create(
+        session=db_session,
+        company_id=company.id,
+        fit=FitDecision.YES,
+        confidence=0.95,
+        confidence_rationale="B2B AI developer platform",
+        reasoning=["Direct REST APIs and SDK for enterprise developers."],
+    )
+    await db_session.commit()
+
+    # 2. Attempt duplicate add
+    res = await async_client.post(
+        "/companies",
+        json={"name": "Sarvam AI", "website_url": "https://www.sarvam.ai"},
+        headers=headers,
+    )
+    assert res.status_code == 409
+    data = res.json()
+    details = data["error"]["details"]
+    assert details["duplicate"] is True
+    assert details["company_id"] == str(company.id)
+    assert details["has_result"] is True
+    assert details["latest_verdict"]["fit"] == "YES"
+    assert details["latest_verdict"]["confidence"] == 0.95
+
+
+# ==============================================================================
+# 15. View Existing Result Endpoint
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_view_existing_result_endpoint(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify GET /companies/{id} returns company details, latest verdict, and signals."""
+    settings = get_settings()
+    headers = {"X-API-Key": settings.api_key}
+
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Stripe",
+        website_url="https://stripe.com",
+        status=CompanyStatus.JUDGED,
+    )
+    verdict = await VerdictRepository.create(
+        session=db_session,
+        company_id=company.id,
+        fit=FitDecision.YES,
+        confidence=0.98,
+        confidence_rationale="Developer payments API infrastructure",
+        reasoning=["Developer-first financial infrastructure."],
+    )
+    await db_session.commit()
+
+    res = await async_client.get(f"/companies/{company.id}", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == str(company.id)
+    assert data["name"] == "Stripe"
+    assert data["latest_verdict"]["fit"] == "YES"
+    assert data["latest_verdict"]["confidence"] == 0.98
+
+
+# ==============================================================================
+# 16. Recompute Existing Company Reuses UUID and Updates Verdict
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_recompute_existing_company_reuses_uuid(db_session: AsyncSession) -> None:
+    """Verify recomputing an existing company reuses its UUID without creating duplicate DB rows."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Datadog",
+        website_url="https://datadoghq.com",
+        status=CompanyStatus.PENDING,
+    )
+    original_id = company.id
+    await db_session.commit()
+
+    llm_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(default_verdict="YES"),
+    )
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    # Recompute with explicit company ID and force_reprocess=True
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[original_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=True,
+        )
+    )
+
+    assert run_result.companies_processed == 1
+    assert run_result.companies_succeeded == 1
+    assert run_result.company_results[0].company_id == original_id
+    assert run_result.company_results[0].fit_decision == FitDecision.YES
+
+    # Verify no duplicate company row created
+    from sqlalchemy import select, func
+    count = await db_session.scalar(select(func.count()).select_from(Company).where(Company.name == "Datadog"))
+    assert count == 1
+
+
+# ==============================================================================
+# 17. New Company Technical Failure Cleans Up Without Fake UNCERTAIN
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_new_company_technical_failure_cleans_up_without_fake_uncertain(db_session: AsyncSession) -> None:
+    """Verify that if Gemini encounters a technical 429 on a new company, it is cleanly removed."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Rate Limited Co",
+        website_url="https://ratelimit.com",
+        status=CompanyStatus.PENDING,
+    )
+    company_id = company.id
+    await db_session.commit()
+
+    llm_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(raise_error=LLMClientError("Gemini API rate limit 429")),
+    )
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[company_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=False,
+        )
+    )
+
+    assert run_result.companies_failed >= 1
+    # Verify new company is deleted and no fake verdict persists
+    reloaded = await CompanyRepository.get_by_id(db_session, company_id)
+    assert reloaded is None
+    verdict = await VerdictRepository.get_latest_by_company(db_session, company_id)
+    assert verdict is None
+
+
+# ==============================================================================
+# 18. Existing Company Recompute Failure Preserves Company and Previous Verdict
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_existing_company_recompute_failure_preserves_company_and_previous_verdict(
+    db_session: AsyncSession,
+) -> None:
+    """Verify that transient Gemini 429 during recompute preserves the existing Company row and prior verdict."""
+    # 1. Create an existing company with a valid previous verdict
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Sarvam AI",
+        website_url="https://www.sarvam.ai",
+        status=CompanyStatus.JUDGED,
+    )
+    company_id = company.id
+    prior_verdict = await VerdictRepository.create(
+        session=db_session,
+        company_id=company_id,
+        fit=FitDecision.YES,
+        confidence=0.95,
+        confidence_rationale="B2B AI developer platform",
+        reasoning=["Direct REST APIs and SDK for enterprise developers."],
+    )
+    await db_session.commit()
+
+    # 2. Recompute with simulated Gemini 429 / timeout failure
+    llm_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(raise_error=LLMClientError("Gemini API rate limit 429 (ResourceExhausted)")),
+    )
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[company_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=True,
+        )
+    )
+
+    # 3. Assert failure is reported in run telemetry
+    assert run_result.companies_failed == 1
+    assert run_result.company_results[0].status == CompanyStatus.FAILED
+    assert "429" in (run_result.company_results[0].error or "")
+
+    # 4. Verify existing Company row is PRESERVED in PostgreSQL
+    preserved_company = await CompanyRepository.get_by_id(db_session, company_id)
+    assert preserved_company is not None
+    assert preserved_company.id == company_id
+    assert preserved_company.name == "Sarvam AI"
+
+    # 5. Verify previous valid verdict is PRESERVED and NOT replaced with fake UNCERTAIN
+    current_verdict = await VerdictRepository.get_latest_by_company(db_session, company_id)
+    assert current_verdict is not None
+    assert current_verdict.id == prior_verdict.id
+    assert current_verdict.fit == FitDecision.YES
+    assert current_verdict.confidence == 0.95
+
+    # 6. Verify no duplicate Company rows created
+    from sqlalchemy import select, func
+    count = await db_session.scalar(select(func.count()).select_from(Company).where(Company.name == "Sarvam AI"))
+    assert count == 1

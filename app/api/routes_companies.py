@@ -211,14 +211,6 @@ async def create_company(
     clean_url = company_in.website_url.strip()
     clean_name = company_in.name.strip()
 
-    # Check for existing company by normalized website URL
-    existing = await CompanyRepository.get_by_website(session, clean_url)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A company with website URL '{clean_url}' already exists (ID: {existing.id}).",
-        )
-
     # Extract domain
     domain = None
     try:
@@ -227,6 +219,40 @@ async def create_company(
         domain = parsed.netloc.lower().replace("www.", "") if parsed.netloc else None
     except Exception:
         pass
+
+    # Check for existing company by normalized website URL or domain
+    existing = await CompanyRepository.get_by_website(session, clean_url)
+    if not existing and domain:
+        from sqlalchemy import select
+        existing_res = await session.execute(select(Company).where(Company.domain == domain))
+        existing = existing_res.scalars().first()
+
+    if existing:
+        latest_verdict = await VerdictRepository.get_latest_by_company(session, existing.id)
+        verdict_dict = None
+        if latest_verdict:
+            verdict_dict = {
+                "fit": latest_verdict.fit.value if hasattr(latest_verdict.fit, "value") else str(latest_verdict.fit),
+                "confidence": latest_verdict.confidence,
+                "confidence_rationale": latest_verdict.confidence_rationale,
+                "reasoning": latest_verdict.reasoning if isinstance(latest_verdict.reasoning, list) else [str(latest_verdict.reasoning)],
+                "follow_up_question": latest_verdict.follow_up_question,
+                "evaluated_at": latest_verdict.evaluated_at.isoformat() if latest_verdict.evaluated_at else None,
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": f"{existing.name} already exists.",
+                "duplicate": True,
+                "company_id": str(existing.id),
+                "name": existing.name,
+                "website_url": existing.website_url,
+                "status": existing.status.value if hasattr(existing.status, "value") else str(existing.status),
+                "has_result": bool(latest_verdict is not None and latest_verdict.fit),
+                "latest_verdict": verdict_dict,
+            },
+        )
 
     company = await CompanyRepository.create(
         session=session,

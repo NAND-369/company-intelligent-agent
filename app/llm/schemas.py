@@ -1,7 +1,7 @@
 """Pydantic schemas and structured output contracts for the LLM judge."""
 
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.database.enums import FitDecision
 
@@ -51,3 +51,21 @@ class StructuredLLMVerdict(BaseModel):
         if not cleaned:
             raise ValueError("Reasoning must contain at least one non-empty statement.")
         return cleaned
+
+    @classmethod
+    def from_validated_data(cls, data: dict) -> "StructuredLLMVerdict":
+        """Helper to create and validate verdict."""
+        return cls.model_validate(data)
+
+    @model_validator(mode="after")
+    def validate_fit_confidence_consistency(self) -> "StructuredLLMVerdict":
+        """
+        Enforce semantic consistency: UNCERTAIN decisions must have confidence < 0.50.
+        Internally inconsistent combinations (e.g. UNCERTAIN with 0.95 confidence)
+        are rejected as invalid model responses rather than silently modified.
+        """
+        if self.fit == FitDecision.UNCERTAIN and self.confidence >= 0.50:
+            raise ValueError(
+                f"Inconsistent model response: UNCERTAIN verdict must have confidence < 0.50 (received {self.confidence})."
+            )
+        return self
