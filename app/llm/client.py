@@ -67,14 +67,14 @@ class FakeLLMClient(LLMClient):
                 "key_signals_used": [],
             })
 
-        if "disqualif" in user_prompt.lower() or "fashion" in user_prompt.lower() or "clothing" in user_prompt.lower():
+        if any(w in user_prompt.lower() for w in ("disqualif", "fashion", "clothing", "flipkart", "retail", "shopping", "b2c", "consumer")):
             return json.dumps({
                 "fit": "NO",
-                "confidence": 0.9,
-                "confidence_rationale": "Company explicitly falls under disqualifying criteria.",
+                "confidence": 0.95,
+                "confidence_rationale": "Company explicitly falls under disqualifying B2C consumer retail criteria.",
                 "reasoning": [
-                    "Website copy indicates consumer retail and eCommerce operations.",
-                    "No B2B enterprise software or robotics technology detected in signals."
+                    "Website copy indicates consumer retail and online shopping marketplace operations.",
+                    "Disqualifying signals identified: consumer goods, retail wishlist, consumer rewards, and absence of B2B enterprise software."
                 ],
                 "follow_up_question": None,
                 "key_signals_used": ["HTTP_WEBSITE"],

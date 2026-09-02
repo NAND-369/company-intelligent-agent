@@ -218,7 +218,7 @@ async def test_verdict_repository_operations(db_session: AsyncSession) -> None:
         session=db_session,
         company_id=company.id,
         fit=FitDecision.UNCERTAIN,
-        confidence=0.5,
+        confidence=0.35,
         reasoning=["Initial partial evidence"],
         rubric_version="1.0.0",
     )

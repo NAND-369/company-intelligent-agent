@@ -14,8 +14,9 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import JSON, TypeDecorator
+
 
 from app.database.enums import (
     CompanyStatus,
@@ -211,8 +212,24 @@ class Verdict(Base):
     # Relationship
     company: Mapped["Company"] = relationship(back_populates="verdicts")
 
+    @validates("fit", "confidence")
+    def validate_fit_and_confidence(self, key: str, value: Any) -> Any:
+        """Enforce semantic validation: UNCERTAIN verdict must have confidence < 0.50."""
+        if key == "confidence" and value is not None:
+            if self.fit == FitDecision.UNCERTAIN and float(value) >= 0.50:
+                raise ValueError(
+                    f"Inconsistent model verdict: UNCERTAIN verdict must have confidence < 0.50 (received {value})."
+                )
+        if key == "fit" and value == FitDecision.UNCERTAIN:
+            if self.confidence is not None and float(self.confidence) >= 0.50:
+                raise ValueError(
+                    f"Inconsistent model verdict: UNCERTAIN verdict must have confidence < 0.50 (received {self.confidence})."
+                )
+        return value
+
     def __repr__(self) -> str:
         return f"<Verdict(id={self.id}, fit='{self.fit}', confidence={self.confidence})>"
+
 
 
 class SyncLog(Base):

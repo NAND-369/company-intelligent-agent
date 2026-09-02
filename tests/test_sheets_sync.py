@@ -386,7 +386,7 @@ async def test_pipeline_force_reprocess_overwrites_sheets_sync(db_session: Async
         session=db_session,
         company_id=company.id,
         fit=FitDecision.UNCERTAIN,
-        confidence=0.5,
+        confidence=0.35,
         reasoning=["Initial low confidence"],
     )
     await SyncLogRepository.create(

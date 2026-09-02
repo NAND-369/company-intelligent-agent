@@ -315,6 +315,11 @@ class VerdictRepository:
         rubric_version: Optional[str] = None,
     ) -> Verdict:
         """Persist a structured LLM judgment verdict."""
+        if fit == FitDecision.UNCERTAIN and confidence >= 0.50:
+            raise ValueError(
+                f"Cannot persist inconsistent Verdict: UNCERTAIN fit must have confidence < 0.50 (received {confidence})."
+            )
+
         verdict = Verdict(
             company_id=company_id,
             fit=fit,

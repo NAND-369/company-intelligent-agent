@@ -6,7 +6,8 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.enums import CompanyStatus, FitDecision, SignalStatus, SignalType
-from app.database.models import Company, Signal
+from app.database.models import Company, Signal, Verdict
+
 from app.database.repositories import (
     CompanyRepository,
     SignalRepository,
@@ -541,3 +542,122 @@ async def test_gemini_client_structured_404_error_safety(monkeypatch: pytest.Mon
     assert "code: 404" in err_msg
     assert "status: NOT_FOUND" in err_msg
     assert secret_key not in err_msg
+
+
+# ==============================================================================
+# 5. Regression Tests: Flipkart & Semantic Consistency Boundary
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_flipkart_b2c_retail_evaluates_as_no_with_high_confidence(db_session: AsyncSession) -> None:
+    """Verify that clearly consumer-facing B2C retail/marketplace (Flipkart) evaluates as NO with high confidence."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Flipkart",
+        website_url="https://www.flipkart.com",
+        sheet_row_id="row_flipkart_test",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://www.flipkart.com",
+        extracted_facts={
+            "page_title": "Online Shopping Site for Mobiles, Electronics, Furniture, Grocery, Lifestyle, Books & More. Best Offers!",
+            "headings_summary": ["Top Offers", "Wishlist & Cart", "Customer Orders", "SuperCoins Rewards"],
+            "main_content_snippet": (
+                "Flipkart is India's leading consumer e-commerce marketplace offering retail products, "
+                "fashion, groceries, consumer electronics, customer wishlist, and order tracking."
+            ),
+        },
+    )
+    await db_session.commit()
+
+    service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient())
+    verdict = await service.evaluate_company(company.id)
+
+    assert verdict is not None
+    assert verdict.fit == FitDecision.NO
+    assert verdict.confidence >= 0.85
+    assert any("retail" in r.lower() or "disqualif" in r.lower() or "consumer" in r.lower() for r in verdict.reasoning)
+
+    # Verify persisted in PostgreSQL as NO
+    persisted = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert persisted is not None
+    assert persisted.fit == FitDecision.NO
+    assert persisted.confidence >= 0.85
+
+
+@pytest.mark.asyncio
+async def test_verdict_repository_and_model_reject_uncertain_high_confidence(db_session: AsyncSession) -> None:
+    """Verify that both VerdictRepository and Verdict ORM model strictly reject UNCERTAIN with confidence >= 0.50."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Invalid Verdict Co",
+        website_url="https://invalid-verdict.com",
+        sheet_row_id="row_inv_1",
+    )
+    await db_session.commit()
+
+    # 1. Repository boundary rejection
+    with pytest.raises(ValueError, match="UNCERTAIN fit must have confidence < 0.50"):
+        await VerdictRepository.create(
+            session=db_session,
+            company_id=company.id,
+            fit=FitDecision.UNCERTAIN,
+            confidence=0.95,
+            reasoning=["Disqualifying retail website."],
+        )
+
+    # 2. ORM Model validator boundary rejection
+    with pytest.raises(ValueError, match="UNCERTAIN verdict must have confidence < 0.50"):
+        Verdict(
+            company_id=company.id,
+            fit=FitDecision.UNCERTAIN,
+            confidence=0.95,
+            reasoning=["Disqualifying retail website."],
+        )
+
+
+@pytest.mark.asyncio
+async def test_rejected_invalid_llm_output_cannot_be_persisted(db_session: AsyncSession) -> None:
+    """Verify that if LLM returns UNCERTAIN + 0.95, parser rejects it, repair is attempted, and if un-repaired raises error without saving."""
+    from app.llm.parser import LLMParseError
+
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Malformed Output Co",
+        website_url="https://malformed-out.com",
+        sheet_row_id="row_mal_1",
+        status=CompanyStatus.ENRICHED,
+    )
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://malformed-out.com",
+        extracted_facts={"page_title": "Consumer Shopping Store"},
+    )
+    await db_session.commit()
+
+    # Raw response has invalid semantic combination (UNCERTAIN + 0.95)
+    invalid_raw = json.dumps({
+        "fit": "UNCERTAIN",
+        "confidence": 0.95,
+        "confidence_rationale": "High confidence it is retail.",
+        "reasoning": ["Consumer shopping site with orders and wishlist."],
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    # Repair also returns invalid semantic combination
+    fake_client = FakeLLMClient(responses=[invalid_raw, invalid_raw])
+    service = LLMJudgeService(session=db_session, llm_client=fake_client)
+
+    with pytest.raises(LLMParseError):
+        await service.evaluate_company(company.id)
+
+    # Verify no verdict was persisted in database
+    persisted = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert persisted is None

@@ -16,9 +16,10 @@ positive_signals:
 
 # Explicit disqualifying indicators
 disqualifying_signals:
-  - "Direct-to-consumer (B2C) physical retail, fashion, or consumer marketplace without enterprise software"
+  - "Direct-to-consumer (B2C) physical retail, online shopping site, consumer e-commerce marketplace, consumer fashion, groceries, or consumer goods"
   - "Parked domain, placeholder landing page, or defunct business"
   - "Dead or non-functional web property with failed connection signals"
+
 
 # Confidence guidelines
 confidence_guidelines:
