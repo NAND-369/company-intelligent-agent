@@ -18,14 +18,24 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <style>
     :root {
       --bg: #E3E2DE;
+      --surface: #FFFFFF;
       --text-main: #141414;
       --text-secondary: #444343;
       --text-muted: #7A7A7A;
       --border: #C7C7C7;
+      --border-dark: #141414;
       --accent: #1351AA;
       --accent-hover: #0E3D82;
+      --accent-light: #EFF6FF;
       --green: #10B981;
+      --green-light: #ECFDF5;
+      --green-dark: #065F46;
       --red: #DC2626;
+      --red-light: #FEF2F2;
+      --red-dark: #991B1B;
+      --amber: #D97706;
+      --amber-light: #FFFBEB;
+      --amber-dark: #92400E;
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
@@ -44,6 +54,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+      width: 100%;
     }
 
     a {
@@ -51,17 +63,26 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       text-decoration: none;
     }
 
-    /* Layout Grid */
+    /* Focus States for Accessibility */
+    a:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Consistent Centered Content Container */
     .container {
-      max-width: 1320px;
+      max-width: 1280px;
+      width: 100%;
       margin: 0 auto;
       padding: 0 2rem;
     }
 
+    /* 12-Column Grid System */
     .grid-12 {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
       gap: 2rem;
+      align-items: start;
     }
 
     .col-span-3 { grid-column: span 3; }
@@ -97,9 +118,10 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       z-index: 100;
       background-color: var(--bg);
       border-bottom: 1px solid var(--border);
-      height: 76px;
+      height: 72px;
       display: flex;
       align-items: center;
+      width: 100%;
     }
 
     .nav-inner {
@@ -109,23 +131,33 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       width: 100%;
     }
 
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
     .nav-title {
       font-size: 14px;
       font-weight: 800;
       letter-spacing: 0.15em;
       text-transform: uppercase;
+      color: var(--text-main);
     }
 
     .nav-status {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.5rem;
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.15em;
       text-transform: uppercase;
       color: var(--text-secondary);
+      background: rgba(255,255,255,0.6);
+      border: 1px solid var(--border);
+      padding: 0.3rem 0.65rem;
     }
 
     .status-dot {
@@ -133,12 +165,18 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       width: 7px;
       height: 7px;
       background-color: var(--green);
+      animation: pulseGreen 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
 
     .nav-links {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1.25rem;
     }
 
     .nav-link {
@@ -162,29 +200,35 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      padding: 0.35rem 0.75rem;
-      background: transparent;
+      padding: 0.45rem 0.85rem;
+      background: #ffffff;
       border: 1px solid var(--border);
       color: var(--text-secondary);
       cursor: pointer;
       transition: all 0.2s ease;
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .key-btn:hover {
       border-color: var(--text-main);
       color: var(--text-main);
+      background-color: #FAFAFA;
     }
 
     /* Hero Section */
     .hero-section {
-      padding: 5rem 0 4.5rem 0;
+      padding: 4.5rem 0 4rem 0;
       border-bottom: 1px solid var(--border);
+      width: 100%;
     }
 
     .hero-meta-block {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 1.25rem;
     }
 
     .hero-meta-title {
@@ -197,13 +241,13 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .hero-headline {
-      font-size: clamp(3rem, 6.5vw, 5.8rem);
+      font-size: clamp(2.4rem, 5.5vw, 4.8rem);
       font-weight: 900;
-      line-height: 0.95;
-      letter-spacing: -0.04em;
+      line-height: 0.98;
+      letter-spacing: -0.035em;
       text-transform: uppercase;
       color: var(--text-main);
-      margin-bottom: 1.75rem;
+      margin-bottom: 1.5rem;
     }
 
     .hero-headline .accent-word {
@@ -211,11 +255,11 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .hero-description {
-      font-size: 18px;
-      line-height: 1.55;
+      font-size: 17px;
+      line-height: 1.6;
       color: var(--text-secondary);
-      max-width: 760px;
-      margin-bottom: 2.25rem;
+      max-width: 740px;
+      margin-bottom: 2rem;
     }
 
     .hero-actions {
@@ -225,11 +269,12 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       flex-wrap: wrap;
     }
 
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0.9rem 2rem;
+      padding: 0.85rem 1.75rem;
       font-family: var(--font-mono);
       font-size: 12px;
       font-weight: 700;
@@ -237,12 +282,14 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       text-transform: uppercase;
       border: 1px solid transparent;
       cursor: pointer;
-      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+      min-height: 44px;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+      user-select: none;
     }
 
     .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+      opacity: 0.6;
+      cursor: not-allowed !important;
     }
 
     .btn-primary {
@@ -282,6 +329,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     .system-strip {
       border-bottom: 1px solid var(--border);
       background-color: var(--bg);
+      width: 100%;
     }
 
     .strip-grid {
@@ -290,7 +338,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .strip-item {
-      padding: 1.25rem 1.5rem;
+      padding: 1.15rem 1.25rem;
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
@@ -309,35 +357,36 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       color: var(--text-main);
     }
 
-    /* General Section Styling */
+    /* Section Structure */
     .section-wrap {
-      padding: 5rem 0;
+      padding: 4.5rem 0;
       border-bottom: 1px solid var(--border);
+      width: 100%;
     }
 
     .section-heading-large {
-      font-size: clamp(2.2rem, 4vw, 3.6rem);
+      font-size: clamp(1.9rem, 3.5vw, 3rem);
       font-weight: 900;
-      line-height: 1.0;
+      line-height: 1.05;
       letter-spacing: -0.03em;
       text-transform: uppercase;
-      margin-bottom: 2rem;
+      margin-bottom: 1.25rem;
     }
 
     .section-subtext {
-      font-size: 16px;
+      font-size: 15px;
       color: var(--text-secondary);
       max-width: 680px;
-      margin-bottom: 2rem;
-      line-height: 1.55;
+      margin-bottom: 1.75rem;
+      line-height: 1.6;
     }
 
     /* Form Controls */
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      margin-bottom: 1.25rem;
+      gap: 0.4rem;
+      margin-bottom: 1.15rem;
     }
 
     .form-label {
@@ -352,7 +401,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     .form-input {
       font-family: var(--font-mono);
       font-size: 14px;
-      padding: 0.85rem 1rem;
+      padding: 0.75rem 1rem;
+      min-height: 44px;
       background-color: #ffffff;
       border: 1px solid var(--border);
       color: var(--text-main);
@@ -365,12 +415,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       border-color: var(--accent);
     }
 
-    .form-grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1.25rem;
-    }
-
     /* Dual Input Source Grid */
     .source-grid {
       display: grid;
@@ -378,19 +422,14 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       gap: 1.5rem;
     }
 
-    @media (max-width: 900px) {
-      .source-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .source-card {
       border: 1px solid var(--border);
-      background-color: #ffffff;
+      background-color: var(--surface);
       padding: 1.75rem;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      min-height: 380px;
     }
 
     .source-card-header {
@@ -413,13 +452,14 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       background: var(--bg);
     }
 
-    /* Notification Box */
+    /* Alert / Notification Box */
     .alert-box {
-      padding: 1rem 1.25rem;
+      padding: 0.9rem 1.15rem;
       border: 1px solid var(--border);
       background-color: #ffffff;
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 12px;
+      line-height: 1.5;
       margin-top: 1rem;
       display: none;
     }
@@ -427,23 +467,25 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     .alert-box.success {
       display: block;
       border-color: var(--green);
-      color: #065F46;
-      background-color: #ECFDF5;
+      color: var(--green-dark);
+      background-color: var(--green-light);
     }
 
     .alert-box.error {
       display: block;
       border-color: var(--red);
-      color: #991B1B;
-      background-color: #FEF2F2;
+      color: var(--red-dark);
+      background-color: var(--red-light);
     }
 
-    /* Modernist Table */
+    /* Working List Table Container */
     .table-container {
       border: 1px solid var(--border);
-      background-color: #ffffff;
+      background-color: var(--surface);
       overflow-x: auto;
-      margin-top: 1.5rem;
+      margin-top: 1.25rem;
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
     }
 
     table {
@@ -451,6 +493,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       border-collapse: collapse;
       text-align: left;
       font-size: 14px;
+      min-width: 650px;
     }
 
     th {
@@ -460,15 +503,17 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       letter-spacing: 0.15em;
       text-transform: uppercase;
       color: var(--text-muted);
-      padding: 1rem 1.25rem;
+      padding: 0.85rem 1rem;
       border-bottom: 1px solid var(--border);
       background-color: var(--bg);
+      white-space: nowrap;
     }
 
     td {
-      padding: 1rem 1.25rem;
+      padding: 0.85rem 1rem;
       border-bottom: 1px solid var(--border);
       color: var(--text-main);
+      vertical-align: middle;
     }
 
     tr:last-child td {
@@ -479,37 +524,39 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       background-color: #FAFAFA;
     }
 
+    /* Badges */
     .badge {
       display: inline-block;
       font-family: var(--font-mono);
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.1em;
-      padding: 0.2rem 0.5rem;
+      padding: 0.2rem 0.55rem;
       text-transform: uppercase;
       border: 1px solid var(--border);
+      white-space: nowrap;
     }
 
     .badge-yes {
-      background-color: #ECFDF5;
-      color: #065F46;
+      background-color: var(--green-light);
+      color: var(--green-dark);
       border-color: #A7F3D0;
     }
 
     .badge-no {
-      background-color: #FEF2F2;
-      color: #991B1B;
+      background-color: var(--red-light);
+      color: var(--red-dark);
       border-color: #FECACA;
     }
 
     .badge-uncertain {
-      background-color: #FFFBEB;
-      color: #92400E;
+      background-color: var(--amber-light);
+      color: var(--amber-dark);
       border-color: #FDE68A;
     }
 
     .badge-synced {
-      background-color: #EFF6FF;
+      background-color: var(--accent-light);
       color: #1E40AF;
       border-color: #BFDBFE;
     }
@@ -521,18 +568,19 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .badge-failed {
-      background-color: #FEF2F2;
-      color: #991B1B;
+      background-color: var(--red-light);
+      color: var(--red-dark);
       border-color: #FECACA;
     }
 
-    /* Live Run Monitor Box */
+    /* Interactive Pipeline Running Monitor */
     .monitor-box {
-      border: 1px solid var(--border);
-      background-color: #ffffff;
-      padding: 2rem;
+      border: 1px solid var(--border-dark);
+      background-color: var(--surface);
+      padding: 1.75rem;
       margin-top: 1.5rem;
       display: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
     }
 
     .monitor-header {
@@ -546,72 +594,183 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
     .monitor-title {
       font-family: var(--font-mono);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 800;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
     }
 
     .monitor-status {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
+      letter-spacing: 0.1em;
       padding: 0.35rem 0.85rem;
       border: 1px solid var(--border);
     }
 
     .status-running {
-      background-color: #EFF6FF;
+      background-color: var(--accent-light);
       color: #1E40AF;
       border-color: #BFDBFE;
+      animation: pulseRunning 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseRunning {
+      0%, 100% { border-color: #BFDBFE; }
+      50% { border-color: var(--accent); }
     }
 
     .status-completed {
-      background-color: #ECFDF5;
-      color: #065F46;
+      background-color: var(--green-light);
+      color: var(--green-dark);
       border-color: #A7F3D0;
     }
 
     .status-failed {
-      background-color: #FEF2F2;
-      color: #991B1B;
+      background-color: var(--red-light);
+      color: var(--red-dark);
       border-color: #FECACA;
     }
 
-    .stage-list {
+    /* Polished Pipeline Stepper Nodes */
+    .pipeline-stepper {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin: 1.25rem 0 1.75rem 0;
+      position: relative;
+    }
+
+    .stepper-node {
+      border: 1px solid var(--border);
+      background-color: var(--bg);
+      padding: 0.9rem 0.75rem;
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
-      font-family: var(--font-mono);
-      font-size: 13px;
+      gap: 0.35rem;
+      transition: all 0.3s ease;
+      position: relative;
     }
 
-    .stage-item {
+    .stepper-node.active {
+      border-color: var(--accent);
+      background-color: #ffffff;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .stepper-node.active .stepper-node-dot {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .stepper-node.done {
+      border-color: var(--green);
+      background-color: #ffffff;
+    }
+
+    .stepper-node.done .stepper-node-dot {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .stepper-node-dot {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      color: var(--text-secondary);
+      justify-content: space-between;
     }
 
-    .stage-item.active {
-      color: var(--accent);
-      font-weight: 700;
+    .stepper-node-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-main);
+      line-height: 1.3;
     }
 
-    .stage-item.done {
-      color: var(--green);
+    /* Active Pulse Animation */
+    .node-pulse-indicator {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background-color: var(--accent);
+      animation: pulseDot 1.2s infinite ease-in-out;
     }
 
-    .stage-icon {
-      width: 18px;
-      text-align: center;
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1.3); }
+      50% { opacity: 0.3; transform: scale(0.7); }
     }
 
+    /* Progress Bar */
+    .progress-bar-container {
+      margin: 1.25rem 0 1.5rem 0;
+      padding: 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .progress-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 8px;
+      background-color: #d6d5d1;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background-color: var(--accent);
+      transition: width 0.4s ease;
+    }
+
+    .progress-bar-fill.done {
+      background-color: var(--green);
+    }
+
+    /* Company Evaluation Live Feed */
+    .pipeline-live-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .feed-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    /* Metrics Grid */
     .metrics-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 1rem;
-      margin-top: 1.5rem;
+      margin-top: 1.25rem;
       padding-top: 1.25rem;
       border-top: 1px solid var(--border);
     }
@@ -638,21 +797,33 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       color: var(--text-main);
     }
 
-    /* Verdict Result Cards */
+    /* Verdict Result Cards with Progressive Reveal */
     .verdicts-list {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
-      margin-top: 1.5rem;
+      gap: 1.25rem;
+      margin-top: 1.25rem;
     }
 
     .verdict-card {
       border: 1px solid var(--border);
-      background-color: #ffffff;
+      background-color: var(--surface);
       padding: 1.75rem;
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      animation: revealCard 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes revealCard {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .verdict-top {
@@ -681,7 +852,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       display: grid;
       grid-template-columns: 140px 140px 1fr;
       gap: 1.25rem;
-      padding: 0.75rem 0;
+      padding: 0.5rem 0;
     }
 
     .verdict-block-title {
@@ -695,7 +866,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .reasoning-list {
-      margin-top: 0.5rem;
+      margin-top: 0.35rem;
       padding-left: 1.25rem;
       color: var(--text-secondary);
       font-size: 14px;
@@ -707,12 +878,13 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     .followup-box {
-      margin-top: 0.75rem;
+      margin-top: 0.5rem;
       padding: 0.85rem 1rem;
       background-color: var(--bg);
       border-left: 3px solid var(--accent);
-      font-size: 14px;
+      font-size: 13.5px;
       color: var(--text-main);
+      line-height: 1.5;
     }
 
     /* Pipeline Sequence Section */
@@ -726,7 +898,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       display: grid;
       grid-template-columns: 80px 1fr 1fr;
       align-items: baseline;
-      padding: 1.25rem 0;
+      padding: 1.15rem 0;
       border-bottom: 1px solid var(--border);
     }
 
@@ -755,6 +927,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       padding: 3.5rem 0;
       background-color: var(--bg);
       border-top: 1px solid var(--border);
+      width: 100%;
     }
 
     .footer-grid {
@@ -775,7 +948,10 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       color: var(--text-main);
     }
 
-    /* Responsive Breakdown */
+    /* ===================================================
+       RESPONSIVE BREAKPOINTS & MOBILE REFINEMENT
+       =================================================== */
+
     @media (max-width: 1024px) {
       .grid-12 {
         grid-template-columns: 1fr;
@@ -793,26 +969,126 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       .strip-item {
         border-bottom: 1px solid var(--border);
       }
-      .verdict-decision-grid {
+      .pipeline-stepper {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .source-grid {
         grid-template-columns: 1fr;
       }
-      .form-grid-2 {
+      .verdict-decision-grid {
         grid-template-columns: 1fr;
       }
     }
 
-    @media (max-width: 640px) {
-      .container { padding: 0 1.25rem; }
-      nav { height: auto; padding: 1rem 0; }
-      .nav-inner { flex-direction: column; gap: 1rem; align-items: flex-start; }
-      .nav-links { width: 100%; justify-content: flex-start; }
-      .strip-grid { grid-template-columns: 1fr; }
-      .strip-item { border-right: none; }
-      .hero-headline { font-size: 2.6rem; }
-      .hero-section { padding: 3.5rem 0 2.5rem 0; }
-      .section-wrap { padding: 3.5rem 0; }
-      .footer-grid { flex-direction: column; align-items: flex-start; }
-      .verdict-top { flex-direction: column; gap: 0.25rem; }
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 1.25rem;
+      }
+      nav {
+        height: auto;
+        padding: 0.85rem 0;
+      }
+      .nav-inner {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-start;
+      }
+      .nav-brand {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(0,0,0,0.08);
+      }
+      .hero-section {
+        padding: 3rem 0 2.5rem 0;
+      }
+      .hero-headline {
+        font-size: clamp(2.2rem, 8vw, 3.4rem);
+      }
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .hero-actions .btn {
+        width: 100%;
+      }
+      .section-wrap {
+        padding: 3rem 0;
+      }
+      .source-card {
+        padding: 1.25rem;
+        min-height: auto;
+      }
+      .pipeline-stepper {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
+      .pipeline-row {
+        grid-template-columns: 50px 1fr;
+        gap: 0.5rem;
+      }
+      .pipeline-desc {
+        grid-column: span 2;
+        margin-top: 0.25rem;
+      }
+      .footer-grid {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+      .verdict-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+      }
+      .verdict-co-url {
+        margin-left: 0;
+      }
+      .pipeline-controls-bar {
+        flex-direction: column;
+        align-items: stretch !important;
+      }
+      .pipeline-controls-bar button {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 0 1rem;
+      }
+      .strip-grid {
+        grid-template-columns: 1fr;
+      }
+      .strip-item {
+        border-right: none;
+      }
+      .hero-headline {
+        font-size: 2.1rem;
+      }
+      .section-heading-large {
+        font-size: 1.75rem;
+      }
+      .verdict-card {
+        padding: 1.25rem;
+      }
+    }
+
+    /* Accessibility: Reduced Motion Support */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .status-dot, .node-pulse-indicator, .status-running {
+        animation: none !important;
+      }
     }
   </style>
 </head>
@@ -821,10 +1097,12 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- Navigation Bar -->
   <nav>
     <div class="container nav-inner">
-      <div class="nav-title">Company Intelligence Agent</div>
-      <div class="nav-status">
-        <span class="status-dot"></span>
-        Production &bull; Online
+      <div class="nav-brand">
+        <div class="nav-title">Company Intelligence Agent</div>
+        <div class="nav-status">
+          <span class="status-dot"></span>
+          Production &bull; Online
+        </div>
       </div>
       <div class="nav-links">
         <a href="/docs" class="nav-link">Docs</a>
@@ -834,29 +1112,31 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   </nav>
 
   <!-- HERO SECTION -->
-  <header class="container hero-section">
-    <div class="grid-12">
-      <div class="col-span-3 hero-meta-block">
-        <div class="label-meta">00 / INTELLIGENCE SYSTEM</div>
-        <div class="hero-meta-title">
-          PRODUCTION<br>
-          AUTONOMOUS<br>
-          COMPANY<br>
-          RESEARCH
+  <header class="hero-section">
+    <div class="container">
+      <div class="grid-12">
+        <div class="col-span-3 hero-meta-block">
+          <div class="label-meta">00 / INTELLIGENCE SYSTEM</div>
+          <div class="hero-meta-title">
+            PRODUCTION<br>
+            AUTONOMOUS<br>
+            COMPANY<br>
+            RESEARCH
+          </div>
         </div>
-      </div>
-      <div class="col-span-9">
-        <h1 class="hero-headline">
-          COMPANIES IN.<br>
-          <span class="accent-word">JUDGMENT</span> OUT.
-        </h1>
-        <p class="hero-description">
-          An autonomous company-intelligence pipeline that collects independent evidence, evaluates it with an LLM, persists the result, and synchronizes the decision back to the source.
-        </p>
-        <div class="hero-actions">
-          <button class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE NOW</button>
-          <button class="btn btn-secondary" onclick="syncFromGoogleSheet()">SYNC FROM SHEET</button>
-          <a href="/docs" class="btn btn-outline">EXPLORE API</a>
+        <div class="col-span-9">
+          <h1 class="hero-headline">
+            COMPANIES IN.<br>
+            <span class="accent-word">JUDGMENT</span> OUT.
+          </h1>
+          <p class="hero-description">
+            An autonomous company-intelligence pipeline that collects multi-source independent evidence, evaluates it with Gemini 3.1 Flash-Lite, persists verdicts in PostgreSQL, and synchronizes decisions back to Google Sheets.
+          </p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE NOW</button>
+            <button class="btn btn-secondary" onclick="syncFromGoogleSheet()">SYNC FROM SHEET</button>
+            <a href="/docs" class="btn btn-outline">EXPLORE API</a>
+          </div>
         </div>
       </div>
     </div>
@@ -879,11 +1159,11 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           <span class="strip-val" id="stripBrowser">READY</span>
         </div>
         <div class="strip-item">
-          <span class="label-meta">LLM</span>
+          <span class="label-meta">LLM PROVIDER</span>
           <span class="strip-val" id="stripLlm">CONFIGURED</span>
         </div>
         <div class="strip-item">
-          <span class="label-meta">SHEETS</span>
+          <span class="label-meta">GOOGLE SHEETS</span>
           <span class="strip-val" id="stripSheets">CONNECTED</span>
         </div>
       </div>
@@ -911,8 +1191,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
                   <span class="label-meta">SOURCE A &bull; MANUAL INPUT</span>
                   <span class="source-badge">URL / FORM</span>
                 </div>
-                <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">ADD COMPANY MANUALLY</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">ADD COMPANY MANUALLY</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
                   Enter a company name and target website URL to stage directly into the working list.
                 </p>
                 <form id="addCompanyForm" onsubmit="handleAddCompany(event)">
@@ -937,17 +1217,17 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
                   <span class="label-meta">SOURCE B &bull; GOOGLE SHEETS</span>
                   <span class="source-badge" style="background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE;">CONNECTED: ✓</span>
                 </div>
-                <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">SYNC FROM GOOGLE SHEETS</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">SYNC FROM GOOGLE SHEETS</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
                   Pull new or updated company rows from the configured worksheet into the working list.
                 </p>
-                <div style="background: var(--bg); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1.25rem;">
+                <div style="background: var(--bg); border: 1px solid var(--border); padding: 0.9rem; margin-bottom: 1.15rem;">
                   <div class="label-meta" style="margin-bottom: 0.25rem;">TARGET WORKSHEET</div>
-                  <div style="font-family: var(--font-mono); font-size: 14px; font-weight: 700;">
+                  <div style="font-family: var(--font-mono); font-size: 13.5px; font-weight: 700;">
                     Companies &bull; <span style="color: var(--green);">● ONLINE</span>
                   </div>
                 </div>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.25rem;">
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
                   Preserves existing row associations and prepares queued companies for pipeline judgment.
                 </p>
                 <button id="syncSheetBtn" class="btn btn-secondary" onclick="syncFromGoogleSheet()" style="width: 100%;">SYNC FROM GOOGLE SHEETS</button>
@@ -972,7 +1252,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             <div>
               <h2 class="section-heading-large" style="margin-bottom: 0.25rem;">CURRENT WORKING LIST</h2>
               <div class="mono-text" style="font-size: 13px; color: var(--text-muted);">
-                <span id="workingListCountBadge" class="badge badge-synced" style="font-size: 12px; margin-right: 0.5rem;">0 COMPANIES</span>
+                <span id="workingListCountBadge" class="badge badge-synced" style="font-size: 11px; margin-right: 0.5rem;">0 COMPANIES</span>
                 Staged for evaluation through the single intelligence pipeline
               </div>
             </div>
@@ -985,7 +1265,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             <table>
               <thead>
                 <tr>
-                  <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(event)" checked /></th>
+                  <th style="width: 44px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(event)" checked /></th>
                   <th>Company</th>
                   <th>Website</th>
                   <th>Source / Row ID</th>
@@ -1003,46 +1283,84 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           </div>
 
           <!-- Pipeline Execution Trigger Controls -->
-          <div style="margin-top: 1.5rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; background: #ffffff; border: 1px solid var(--border); padding: 1.5rem;">
-            <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()" style="padding: 1rem 2.5rem; font-size: 13px;">RUN PIPELINE</button>
-            <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <div class="pipeline-controls-bar" style="margin-top: 1.5rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; background: #ffffff; border: 1px solid var(--border); padding: 1.5rem;">
+            <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()" style="padding: 0.95rem 2.25rem; font-size: 13px;">RUN PIPELINE</button>
+            <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
               <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already evaluated companies
             </label>
           </div>
 
-          <!-- Live Run Monitor Box -->
+          <!-- Interactive Pipeline Running Monitor -->
           <div id="pipelineMonitor" class="monitor-box">
             <div class="monitor-header">
               <div>
-                <div class="monitor-title">PIPELINE RUN EXECUTION</div>
-                <div class="mono-text" id="runIdDisplay" style="font-size: 12px; color: var(--text-muted); margin-top: 0.25rem;"></div>
+                <div class="monitor-title">
+                  <span class="node-pulse-indicator" id="monitorPulseDot"></span>
+                  <span id="monitorStatusText">PIPELINE RUNNING</span>
+                </div>
+                <div class="mono-text" id="runIdDisplay" style="font-size: 11.5px; color: var(--text-muted); margin-top: 0.35rem;"></div>
               </div>
-              <div id="runStatusBadge" class="monitor-status status-running">RUNNING</div>
+              <div id="runStatusBadge" class="monitor-status status-running">INITIALIZING</div>
             </div>
 
-            <div class="stage-list">
-              <div id="stageDiscovery" class="stage-item">
-                <span class="stage-icon">&bull;</span>
-                <span>01. Company Discovery &amp; Ingestion</span>
+            <!-- Connected Stepper Nodes -->
+            <div class="pipeline-stepper">
+              <div id="stepDiscovery" class="stepper-node">
+                <div class="stepper-node-dot">
+                  <span>01</span>
+                  <span class="step-icon">&bull;</span>
+                </div>
+                <div class="stepper-node-label">DISCOVERY</div>
               </div>
-              <div id="stageEnrichment" class="stage-item">
-                <span class="stage-icon">&bull;</span>
-                <span>02. Multi-Source HTTP &amp; Playwright Browser Research</span>
+              <div id="stepResearch" class="stepper-node">
+                <div class="stepper-node-dot">
+                  <span>02</span>
+                  <span class="step-icon">&bull;</span>
+                </div>
+                <div class="stepper-node-label">RESEARCH</div>
               </div>
-              <div id="stageJudgment" class="stage-item">
-                <span class="stage-icon">&bull;</span>
-                <span>03. Gemini 3.1 Flash-Lite Evidence-Based Judgment</span>
+              <div id="stepSignals" class="stepper-node">
+                <div class="stepper-node-dot">
+                  <span>03</span>
+                  <span class="step-icon">&bull;</span>
+                </div>
+                <div class="stepper-node-label">SIGNALS</div>
               </div>
-              <div id="stagePersistence" class="stage-item">
-                <span class="stage-icon">&bull;</span>
-                <span>04. PostgreSQL Persistence &amp; Lease Release</span>
+              <div id="stepJudge" class="stepper-node">
+                <div class="stepper-node-dot">
+                  <span>04</span>
+                  <span class="step-icon">&bull;</span>
+                </div>
+                <div class="stepper-node-label">AI JUDGE</div>
               </div>
-              <div id="stageSync" class="stage-item">
-                <span class="stage-icon">&bull;</span>
-                <span>05. Google Sheets Bidirectional Synchronization</span>
+              <div id="stepSync" class="stepper-node">
+                <div class="stepper-node-dot">
+                  <span>05</span>
+                  <span class="step-icon">&bull;</span>
+                </div>
+                <div class="stepper-node-label">SHEET SYNC</div>
               </div>
             </div>
 
+            <!-- Progress Bar -->
+            <div class="progress-bar-container">
+              <div class="progress-bar-header">
+                <span class="mono-text" id="progressStatusText" style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">
+                  ANALYZING COMPANIES...
+                </span>
+                <span class="mono-text" id="progressFractionText" style="font-size: 12px; font-weight: 800; color: var(--accent);">
+                  0 / 0 EVALUATED
+                </span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="pipelineProgressBarFill"></div>
+              </div>
+            </div>
+
+            <!-- Live Company Evaluation Progress Feed -->
+            <div id="pipelineCompanyLiveFeed" class="pipeline-live-feed" style="display: none;"></div>
+
+            <!-- Metrics Summary Grid -->
             <div id="runMetricsRow" class="metrics-row">
               <div class="metric-cell">
                 <span class="metric-label">Discovered</span>
@@ -1109,48 +1427,51 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             <div class="pipeline-row">
               <span class="pipeline-num">01</span>
               <span class="pipeline-name">GOOGLE SHEETS</span>
-              <span class="pipeline-desc">Source companies</span>
+              <span class="pipeline-desc">Source company rows from spreadsheet</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">02</span>
               <span class="pipeline-name">INGESTION</span>
-              <span class="pipeline-desc">Detect and persist companies</span>
+              <span class="pipeline-desc">Normalize domain and persist entity</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">03</span>
               <span class="pipeline-name">ENRICHMENT</span>
-              <span class="pipeline-desc">Independent company signals</span>
+              <span class="pipeline-desc">Multi-source independent signals &amp; metadata</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">04</span>
               <span class="pipeline-name">BROWSER AUTOMATION</span>
-              <span class="pipeline-desc">Playwright-rendered web evidence</span>
+              <span class="pipeline-desc">Playwright-rendered web evidence extraction</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">05</span>
               <span class="pipeline-name">LLM JUDGMENT</span>
-              <span class="pipeline-desc">Evidence &rarr; structured verdict</span>
+              <span class="pipeline-desc">Gemini 3.1 Flash-Lite precedence-enforced verdict</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">06</span>
               <span class="pipeline-name">POSTGRESQL</span>
-              <span class="pipeline-desc">Persistent processing state</span>
+              <span class="pipeline-desc">Atomic persistence and lease management</span>
             </div>
             <div class="pipeline-row">
               <span class="pipeline-num">07</span>
               <span class="pipeline-name">SHEET SYNC</span>
-              <span class="pipeline-desc">Verdict returned to source</span>
+              <span class="pipeline-desc">Structured write-back to spreadsheet row</span>
             </div>
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
   <!-- EXISTING RESULT MODAL -->
   <div id="existingResultModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); z-index: 1000; align-items: center; justify-content: center; padding: 1.5rem;">
     <div style="background: var(--bg); border: 2px solid var(--text-main); max-width: 820px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
         <div>
           <div class="label-meta label-accent">EXISTING EVALUATION RECORD</div>
-          <h3 id="modalCoName" style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin-top: 0.25rem;">Company Name</h3>
+          <h3 id="modalCoName" style="font-size: 22px; font-weight: 900; text-transform: uppercase; margin-top: 0.25rem;">Company Name</h3>
           <a id="modalCoUrl" href="#" target="_blank" class="mono-text" style="font-size: 13px; color: var(--text-secondary); text-decoration: underline;"></a>
         </div>
         <button class="key-btn" onclick="closeExistingResultModal()" style="font-size: 13px; padding: 0.5rem 1rem;">&times; CLOSE</button>
@@ -1296,9 +1617,9 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         html += validJudged.map(c => {
           const rawFit = c.fit || 'UNCERTAIN';
           const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : 'UNCERTAIN').toUpperCase();
-          let fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
-          if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
-          else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
+          let fitBadge = `<span class="badge badge-uncertain" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
+          if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
+          else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
 
           const conf = (c.confidence !== null && c.confidence !== undefined) ? `${Math.round(c.confidence * 100)}%` : '—';
           const reasoningItems = Array.isArray(c.reasoning) ? c.reasoning : (c.reasoning ? [c.reasoning] : []);
@@ -1352,7 +1673,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       const btn = document.getElementById('syncSheetBtn');
       const notice = document.getElementById('sheetSyncNotice');
       btn.disabled = true;
-      btn.innerText = 'SYNCING...';
+      btn.innerHTML = '↻ SYNCING...';
       notice.className = 'alert-box';
       notice.style.display = 'none';
 
@@ -1372,7 +1693,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         const data = await res.json();
         if (res.ok && data.status === 'success') {
           const imported = data.imported_companies || [];
-          let addedCount = 0;
           for (const item of imported) {
             const existingIdx = sessionCompanies.findIndex(
               c => c.id === item.id || (item.domain && c.domain && c.domain === item.domain) || c.name.toLowerCase() === item.name.toLowerCase()
@@ -1392,24 +1712,30 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               sessionCompanies[existingIdx] = { ...sessionCompanies[existingIdx], ...coObj };
             } else {
               sessionCompanies.push(coObj);
-              addedCount++;
             }
           }
           renderSessionCompanies();
 
+          btn.innerHTML = '✓ SYNCED';
           notice.className = 'alert-box success';
           notice.innerText = `✓ Synced from Google Sheets: ${data.rows_read} rows read, ${data.companies_created} created, ${data.companies_updated} updated. Staged ${sessionCompanies.length} companies in working list.`;
           notice.style.display = 'block';
+
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.innerText = 'SYNC FROM GOOGLE SHEETS';
+          }, 2000);
         } else {
           notice.className = 'alert-box error';
           notice.innerText = `Sync failed: ${data.errors ? data.errors.join(', ') : (data.detail || 'Unknown error')}`;
           notice.style.display = 'block';
+          btn.disabled = false;
+          btn.innerText = 'SYNC FROM GOOGLE SHEETS';
         }
       } catch (err) {
         notice.className = 'alert-box error';
         notice.innerText = `Network error during sync: ${err.message}`;
         notice.style.display = 'block';
-      } finally {
         btn.disabled = false;
         btn.innerText = 'SYNC FROM GOOGLE SHEETS';
       }
@@ -1454,9 +1780,9 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         const v = data.latest_verdict;
         const rawFit = v.fit || 'UNCERTAIN';
         const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : 'UNCERTAIN').toUpperCase();
-        let fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
-        if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
-        else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
+        let fitBadge = `<span class="badge badge-uncertain" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
+        if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
+        else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:13px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
 
         const conf = (v.confidence !== null && v.confidence !== undefined) ? `${Math.round(v.confidence * 100)}%` : '—';
         const reasoningItems = Array.isArray(v.reasoning) ? v.reasoning : (v.reasoning ? [v.reasoning] : []);
@@ -1500,7 +1826,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     }
 
     async function recomputeExistingCompany(companyId, companyName, companyUrl) {
-      // 1. Add to session working list if not present, or reset status to PENDING
       let co = sessionCompanies.find(c => c.id === companyId);
       if (!co) {
         co = {
@@ -1522,11 +1847,9 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
       renderSessionCompanies();
 
-      // 2. Hide notice
       const notice = document.getElementById('addCompanyNotice');
       if (notice) notice.style.display = 'none';
 
-      // 3. Trigger pipeline explicitly for this company with force_reprocess
       await triggerPipelineRunForCompanies([companyId], true);
     }
 
@@ -1539,14 +1862,13 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
       if (!name || !website_url) return;
 
-      // 1. Check if duplicate in current working list
       const existingInSession = sessionCompanies.find(
         c => c.name.toLowerCase() === name.toLowerCase() || c.website_url.toLowerCase() === website_url.toLowerCase()
       );
       if (existingInSession) {
         notice.className = 'alert-box error';
         notice.innerHTML = `
-          <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(existingInSession.name)} is already in the working list.</div>
+          <div style="font-weight: 700; font-size: 13px; margin-bottom: 0.5rem;">${escapeHtml(existingInSession.name)} is already in the working list.</div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
             <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${existingInSession.id}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
             <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${existingInSession.id}', '${escapeHtml(existingInSession.name)}', '${escapeHtml(existingInSession.website_url)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
@@ -1599,7 +1921,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           const dupName = errDetails.name || name;
           const dupUrl = errDetails.website_url || website_url;
 
-          // Also add the existing record to the session working list if not already there!
           if (dupId) {
             const alreadyThere = sessionCompanies.some(c => c.id === dupId);
             if (!alreadyThere) {
@@ -1619,7 +1940,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
           notice.className = 'alert-box error';
           notice.innerHTML = `
-            <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(dupName)} already exists in database. Staged in working list.</div>
+            <div style="font-weight: 700; font-size: 13px; margin-bottom: 0.5rem;">${escapeHtml(dupName)} already exists in database. Staged in working list.</div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
               <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${dupId}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
               <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${dupId}', '${escapeHtml(dupName)}', '${escapeHtml(dupUrl)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
@@ -1641,23 +1962,59 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
     }
 
+    function setStepperNodeState(nodeId, state) {
+      const node = document.getElementById(nodeId);
+      if (!node) return;
+      node.className = 'stepper-node ' + state;
+      const icon = node.querySelector('.step-icon');
+      if (state === 'done') {
+        icon.innerHTML = '&check;';
+        icon.style.color = 'var(--green)';
+      } else if (state === 'active') {
+        icon.innerHTML = '<span class="node-pulse-indicator"></span>';
+      } else {
+        icon.innerHTML = '&bull;';
+        icon.style.color = 'var(--text-muted)';
+      }
+    }
+
     async function triggerPipelineRunForCompanies(companyIds, forceReprocess = false) {
       const btn = document.getElementById('runPipelineBtn');
       btn.disabled = true;
-      btn.innerText = 'DISPATCHING...';
+      btn.innerHTML = '<span class="node-pulse-indicator"></span> RUNNING PIPELINE...';
 
       const monitor = document.getElementById('pipelineMonitor');
       monitor.style.display = 'block';
       document.getElementById('syncConfirmationBanner').style.display = 'none';
       document.getElementById('runStatusBadge').className = 'monitor-status status-running';
       document.getElementById('runStatusBadge').innerText = 'STARTING...';
+      document.getElementById('monitorStatusText').innerText = 'PIPELINE RUNNING';
       document.getElementById('runIdDisplay').innerText = `Initializing run for ${companyIds.length} company/companies...`;
 
-      setStageState('stageDiscovery', 'active');
-      setStageState('stageEnrichment', '');
-      setStageState('stageJudgment', '');
-      setStageState('stagePersistence', '');
-      setStageState('stageSync', '');
+      document.getElementById('progressStatusText').innerText = `DISPATCHING PIPELINE (0 / ${companyIds.length} EVALUATED)...`;
+      document.getElementById('progressFractionText').innerText = `0 / ${companyIds.length} EVALUATED`;
+      const fill = document.getElementById('pipelineProgressBarFill');
+      fill.className = 'progress-bar-fill';
+      fill.style.width = '0%';
+
+      setStepperNodeState('stepDiscovery', 'active');
+      setStepperNodeState('stepResearch', '');
+      setStepperNodeState('stepSignals', '');
+      setStepperNodeState('stepJudge', '');
+      setStepperNodeState('stepSync', '');
+
+      // Render initial live feed
+      const feed = document.getElementById('pipelineCompanyLiveFeed');
+      const targetCos = sessionCompanies.filter(c => companyIds.includes(c.id));
+      if (targetCos.length > 0) {
+        feed.style.display = 'flex';
+        feed.innerHTML = targetCos.map(c => `
+          <div class="feed-item" id="feedItem_${c.id}">
+            <span><strong>${escapeHtml(c.name)}</strong> <span class="mono-text" style="color:var(--text-muted); font-size:11px;">(${escapeHtml(c.domain || c.website_url)})</span></span>
+            <span class="badge badge-pending" id="feedBadge_${c.id}">QUEUED</span>
+          </div>
+        `).join('');
+      }
 
       try {
         const res = await fetch('/pipeline/run', {
@@ -1681,7 +2038,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         const data = await res.json();
         if (res.ok && data.run_id) {
           document.getElementById('runIdDisplay').innerText = `RUN ID: ${data.run_id}`;
-          startRunPolling(data.run_id);
+          startRunPolling(data.run_id, companyIds.length);
         } else {
           document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
           document.getElementById('runStatusBadge').innerText = 'DISPATCH FAILED';
@@ -1726,21 +2083,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       await triggerPipelineRunForCompanies(targetCompanies.map(c => c.id), forceReprocess);
     }
 
-    function setStageState(elementId, state) {
-      const el = document.getElementById(elementId);
-      if (!el) return;
-      el.className = 'stage-item ' + state;
-      const icon = el.querySelector('.stage-icon');
-      if (state === 'done') {
-        icon.innerHTML = '&check;';
-      } else if (state === 'active') {
-        icon.innerHTML = '&bull;';
-      } else {
-        icon.innerHTML = '&bull;';
-      }
-    }
-
-    function startRunPolling(runId) {
+    function startRunPolling(runId, totalTargetCount) {
       if (activePollingInterval) clearInterval(activePollingInterval);
 
       const poll = async () => {
@@ -1753,53 +2096,94 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           const metrics = data.metrics || {};
           const summary = data.summary || {};
 
-          document.getElementById('metricDiscovered').innerText = metrics.total_companies_discovered ?? 0;
-          document.getElementById('metricProcessed').innerText = metrics.processed_count ?? 0;
-          document.getElementById('metricSuccess').innerText = metrics.success_count ?? 0;
-          document.getElementById('metricSynced').innerText = metrics.synced_to_sheet_count ?? 0;
+          const discovered = metrics.total_companies_discovered ?? totalTargetCount ?? 0;
+          const processed = metrics.processed_count ?? 0;
+          const synced = metrics.synced_to_sheet_count ?? 0;
+          const success = metrics.success_count ?? 0;
+
+          document.getElementById('metricDiscovered').innerText = discovered;
+          document.getElementById('metricProcessed').innerText = processed;
+          document.getElementById('metricSuccess').innerText = success;
+          document.getElementById('metricSynced').innerText = synced;
 
           if (summary.fit_yes !== undefined) {
             document.getElementById('metricDecisions').innerText = `Y:${summary.fit_yes} N:${summary.fit_no} ?:${summary.fit_uncertain}`;
+          }
+
+          // Progress calculation
+          const totalExpected = discovered > 0 ? discovered : totalTargetCount;
+          const percent = totalExpected > 0 ? Math.min(100, Math.round((processed / totalExpected) * 100)) : 0;
+          const fill = document.getElementById('pipelineProgressBarFill');
+          fill.style.width = `${percent}%`;
+
+          document.getElementById('progressStatusText').innerText = `ANALYZING (${processed} OF ${totalExpected} EVALUATED)...`;
+          document.getElementById('progressFractionText').innerText = `${processed} / ${totalExpected} EVALUATED (${percent}%)`;
+
+          // Update feed item badges
+          const results = data.company_results || [];
+          for (const r of results) {
+            const badge = document.getElementById(`feedBadge_${r.company_id}`);
+            if (badge) {
+              const fit = (r.fit || 'UNCERTAIN').replace('FitDecision.', '');
+              if (fit === 'YES') {
+                badge.className = 'badge badge-yes';
+                badge.innerText = '✓ FIT: YES';
+              } else if (fit === 'NO') {
+                badge.className = 'badge badge-no';
+                badge.innerText = '✓ FIT: NO';
+              } else {
+                badge.className = 'badge badge-uncertain';
+                badge.innerText = '✓ FIT: UNCERTAIN';
+              }
+            }
           }
 
           if (status === 'RUNNING') {
             document.getElementById('runStatusBadge').className = 'monitor-status status-running';
             document.getElementById('runStatusBadge').innerText = 'RUNNING';
 
-            const processed = metrics.processed_count || 0;
-            const total = metrics.total_companies_discovered || 0;
-
-            setStageState('stageDiscovery', 'done');
+            setStepperNodeState('stepDiscovery', 'done');
             if (processed > 0) {
-              setStageState('stageEnrichment', 'done');
-              setStageState('stageJudgment', 'done');
-              setStageState('stagePersistence', 'active');
+              setStepperNodeState('stepResearch', 'done');
+              setStepperNodeState('stepSignals', 'done');
+              setStepperNodeState('stepJudge', 'done');
+              setStepperNodeState('stepSync', 'active');
             } else {
-              setStageState('stageEnrichment', 'active');
-              setStageState('stageJudgment', 'active');
+              setStepperNodeState('stepResearch', 'active');
+              setStepperNodeState('stepSignals', 'active');
+              setStepperNodeState('stepJudge', 'active');
             }
           } else if (status === 'COMPLETED' || status === 'PARTIAL_FAILURE') {
             clearInterval(activePollingInterval);
             document.getElementById('runStatusBadge').className = 'monitor-status status-completed';
-            document.getElementById('runStatusBadge').innerText = status;
+            document.getElementById('runStatusBadge').innerText = '✓ COMPLETED';
+            document.getElementById('monitorStatusText').innerText = '✓ PIPELINE COMPLETE';
 
-            setStageState('stageDiscovery', 'done');
-            setStageState('stageEnrichment', 'done');
-            setStageState('stageJudgment', 'done');
-            setStageState('stagePersistence', 'done');
-            setStageState('stageSync', 'done');
+            setStepperNodeState('stepDiscovery', 'done');
+            setStepperNodeState('stepResearch', 'done');
+            setStepperNodeState('stepSignals', 'done');
+            setStepperNodeState('stepJudge', 'done');
+            setStepperNodeState('stepSync', 'done');
 
-            if (metrics.synced_to_sheet_count > 0 || metrics.success_count > 0) {
+            fill.style.width = '100%';
+            fill.className = 'progress-bar-fill done';
+            document.getElementById('progressStatusText').innerText = `✓ PIPELINE EXECUTION COMPLETED (${processed} EVALUATED, ${synced} SYNCED)`;
+            document.getElementById('progressFractionText').innerText = `100% COMPLETE`;
+
+            if (synced > 0 || success > 0) {
               const banner = document.getElementById('syncConfirmationBanner');
-              banner.innerHTML = `&check; DATABASE UPDATED (${metrics.success_count} PERSISTED) &nbsp;&bull;&nbsp; &check; GOOGLE SHEET SYNCED (${metrics.synced_to_sheet_count} ROWS)`;
+              banner.innerHTML = `&check; ${success} COMPANIES PERSISTED IN POSTGRESQL &nbsp;&bull;&nbsp; &check; ${synced} ROWS SYNCHRONIZED TO GOOGLE SHEETS`;
               banner.style.display = 'block';
             }
 
-            document.getElementById('runPipelineBtn').disabled = false;
-            document.getElementById('runPipelineBtn').innerText = 'RUN PIPELINE';
+            const btn = document.getElementById('runPipelineBtn');
+            btn.innerHTML = '✓ PIPELINE COMPLETE';
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.innerText = 'RUN PIPELINE';
+            }, 3000);
 
             // Update session working list with latest results
-            const results = data.company_results || [];
             for (const r of results) {
               const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
               if (co) {
@@ -1810,18 +2194,17 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               }
             }
             renderSessionCompanies();
-
-            // Render run-specific results exclusively
             renderLatestRunResults(results, metrics);
           } else if (status === 'FAILED') {
             clearInterval(activePollingInterval);
             document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
             document.getElementById('runStatusBadge').innerText = 'FAILED';
+            document.getElementById('monitorStatusText').innerText = '⚠ PIPELINE FAILED';
 
-            document.getElementById('runPipelineBtn').disabled = false;
-            document.getElementById('runPipelineBtn').innerText = 'RUN PIPELINE';
+            const btn = document.getElementById('runPipelineBtn');
+            btn.disabled = false;
+            btn.innerText = 'RUN PIPELINE';
 
-            const results = data.company_results || [];
             for (const r of results) {
               const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
               if (co) {
@@ -1829,7 +2212,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               }
             }
             renderSessionCompanies();
-
             renderLatestRunResults(results, metrics);
           }
         } catch (err) {
