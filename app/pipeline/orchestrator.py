@@ -219,108 +219,105 @@ class PipelineOrchestrator:
                 logger.info("Dry run complete: %d candidate companies identified.", len(candidates))
                 return result
 
-            # 5. Stage 3: Process companies with bounded concurrency and leasing
-            semaphore = asyncio.Semaphore(self.settings.pipeline_max_concurrency)
-
+            # 5. Stage 3: Process companies with transactional safety and lease tracking
             for co_id, co_name, initial_status in candidate_infos:
-                async with semaphore:
-                    try:
-                        has_lease = await CompanyRepository.acquire_lease(
-                            session=self.session,
-                            company_id=co_id,
-                            lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
-                            force=req.force_reprocess,
-                        )
-                        await self.session.commit()
+                try:
+                    has_lease = await CompanyRepository.acquire_lease(
+                        session=self.session,
+                        company_id=co_id,
+                        lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
+                        force=req.force_reprocess,
+                    )
+                    await self.session.commit()
 
-                        if not has_lease and initial_status != CompanyStatus.PROCESSING:
-                            logger.info("Company '%s' is leased by another worker. Skipping.", co_name)
-                            continue
+                    if not has_lease and initial_status != CompanyStatus.PROCESSING:
+                        logger.info("Company '%s' is leased by another worker. Skipping.", co_name)
+                        continue
 
-                        company = await CompanyRepository.get_by_id(self.session, co_id)
-                        if not company:
-                            logger.warning("Company '%s' (id=%s) no longer exists. Skipping.", co_name, co_id)
-                            continue
+                    company = await CompanyRepository.get_by_id(self.session, co_id)
+                    if not company:
+                        logger.warning("Company '%s' (id=%s) no longer exists. Skipping.", co_name, co_id)
+                        continue
 
-                        co_result = await self.processor.process_company(
-                            company,
-                            force_reprocess=req.force_reprocess,
-                        )
-                        result.company_results.append(co_result)
-                        result.companies_processed += 1
+                    co_result = await self.processor.process_company(
+                        company,
+                        force_reprocess=req.force_reprocess,
+                    )
+                    result.company_results.append(co_result)
+                    result.companies_processed += 1
 
-                        if co_result.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED):
-                            result.companies_succeeded += 1
-                            if co_result.fit_decision == FitDecision.YES:
-                                result.fit_yes_count += 1
-                            elif co_result.fit_decision == FitDecision.NO:
-                                result.fit_no_count += 1
-                            elif co_result.fit_decision == FitDecision.UNCERTAIN:
-                                result.fit_uncertain_count += 1
+                    if co_result.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED):
+                        result.companies_succeeded += 1
+                        if co_result.fit_decision == FitDecision.YES:
+                            result.fit_yes_count += 1
+                        elif co_result.fit_decision == FitDecision.NO:
+                            result.fit_no_count += 1
+                        elif co_result.fit_decision == FitDecision.UNCERTAIN:
+                            result.fit_uncertain_count += 1
 
-                            # Stage 4 (Optional): Synchronize verdict back to Google Sheets row
-                            if req.sync_to_sheets:
-                                try:
-                                    logger.info(
-                                        "Synchronizing verdict for '%s' to Google Sheets (force=%s)...",
-                                        co_name,
-                                        req.force_reprocess,
-                                    )
-                                    sync_res = await self.sync_service.sync_company(
-                                        company_id=co_id,
-                                        force=req.force_reprocess,
-                                        dry_run=req.dry_run,
-                                    )
-                                    if sync_res.status == SyncOutcome.SUCCESS:
-                                        co_result.is_synced = True
-                                        co_result.status = CompanyStatus.SYNCED
-                                        result.synced_count += 1
-                                    elif sync_res.error_details:
-                                        result.errors.append(f"Sync error for {co_name}: {sync_res.error_details}")
-                                except Exception as sync_exc:
-                                    msg = f"Unexpected sync error for {co_name}: {sync_exc!s}"
-                                    logger.error(msg)
-                                    result.errors.append(msg)
-                        else:
-                            result.companies_failed += 1
-                            if co_result.error:
-                                result.errors.append(f"Company {co_name}: {co_result.error}")
-
-                    except Exception as loop_co_exc:
-                        logger.exception("Unexpected error processing company '%s': %s", co_name, loop_co_exc)
+                        # Stage 4 (Optional): Synchronize verdict back to Google Sheets row
+                        if req.sync_to_sheets:
+                            try:
+                                logger.info(
+                                    "Synchronizing verdict for '%s' to Google Sheets (force=%s)...",
+                                    co_name,
+                                    req.force_reprocess,
+                                )
+                                sync_res = await self.sync_service.sync_company(
+                                    company_id=co_id,
+                                    force=req.force_reprocess,
+                                    dry_run=req.dry_run,
+                                )
+                                if sync_res.status == SyncOutcome.SUCCESS:
+                                    co_result.is_synced = True
+                                    co_result.status = CompanyStatus.SYNCED
+                                    result.synced_count += 1
+                                elif sync_res.error_details:
+                                    result.errors.append(f"Sync error for {co_name}: {sync_res.error_details}")
+                            except Exception as sync_exc:
+                                msg = f"Unexpected sync error for {co_name}: {sync_exc!s}"
+                                logger.error(msg)
+                                result.errors.append(msg)
+                    else:
                         result.companies_failed += 1
-                        result.companies_processed += 1
-                        result.errors.append(f"Company {co_name} unhandled error: {loop_co_exc!s}")
-                        try:
-                            await self.session.rollback()
-                            await CompanyRepository.delete(self.session, co_id)
-                            await self.session.commit()
-                        except Exception as db_err:
-                            logger.error("Failed to delete company %s on error: %s", co_name, db_err)
-                    finally:
-                        # Release company lease lock if record still exists
-                        try:
-                            await CompanyRepository.release_lease(self.session, co_id)
-                            await self.session.commit()
-                        except Exception as rel_err:
-                            logger.debug("Error releasing lease for %s: %s", co_name, rel_err)
+                        if co_result.error:
+                            result.errors.append(f"Company {co_name}: {co_result.error}")
 
-                        # Update running counters in database
-                        try:
-                            await PipelineRunRepository.update_counters(
-                                session=self.session,
-                                run_id=run_id,
-                                total_companies=result.companies_discovered,
-                                processed_count=result.companies_processed,
-                                success_count=result.companies_succeeded,
-                                synced_count=result.synced_count,
-                                fit_yes_count=result.fit_yes_count,
-                                fit_no_count=result.fit_no_count,
-                                fit_uncertain_count=result.fit_uncertain_count,
-                            )
-                            await self.session.commit()
-                        except Exception as counter_err:
-                            logger.error("Error updating pipeline run counters: %s", counter_err)
+                except Exception as loop_co_exc:
+                    logger.exception("Unexpected error processing company '%s': %s", co_name, loop_co_exc)
+                    result.companies_failed += 1
+                    result.companies_processed += 1
+                    result.errors.append(f"Company {co_name} unhandled error: {loop_co_exc!s}")
+                    try:
+                        await self.session.rollback()
+                        await CompanyRepository.delete(self.session, co_id)
+                        await self.session.commit()
+                    except Exception as db_err:
+                        logger.error("Failed to delete company %s on error: %s", co_name, db_err)
+                finally:
+                    # Release company lease lock if record still exists
+                    try:
+                        await CompanyRepository.release_lease(self.session, co_id)
+                        await self.session.commit()
+                    except Exception as rel_err:
+                        logger.debug("Error releasing lease for %s: %s", co_name, rel_err)
+
+                # Update running counters in database
+                try:
+                    await PipelineRunRepository.update_counters(
+                        session=self.session,
+                        run_id=run_id,
+                        total_companies=result.companies_discovered,
+                        processed_count=result.companies_processed,
+                        success_count=result.companies_succeeded,
+                        synced_count=result.synced_count,
+                        fit_yes_count=result.fit_yes_count,
+                        fit_no_count=result.fit_no_count,
+                        fit_uncertain_count=result.fit_uncertain_count,
+                    )
+                    await self.session.commit()
+                except Exception as counter_err:
+                    logger.error("Error updating pipeline run counters: %s", counter_err)
 
             # 6. Stage 5: Finalize PipelineRun status and metrics
             duration = round(time.monotonic() - start_time, 2)

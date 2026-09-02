@@ -11,8 +11,10 @@ from app.enrichment.http_client import (
     HttpEnrichmentError,
     HttpNotFoundError,
     HttpRateLimitedError,
+    HttpSecurityError,
     HttpTimeoutError,
 )
+from app.enrichment.url_validator import validate_target_url
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,12 @@ class PlaywrightBrowserClient:
         Navigate to a URL with headless Chromium, execute JavaScript, and capture rendered HTML.
         Returns: (status_code, rendered_html, page_title, headers, duration_ms).
         """
+        # Enforce SSRF & scheme validation (allow file:// for offline testing fixtures)
+        is_valid, err_reason = validate_target_url(url, allow_file_scheme=True)
+        if not is_valid:
+            logger.warning("Playwright rejected unsafe/invalid URL '%s': %s", url, err_reason)
+            raise HttpSecurityError(f"URL validation failed: {err_reason}")
+
         start_time = time.monotonic()
         browser = await self._ensure_browser()
 

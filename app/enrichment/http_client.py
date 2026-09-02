@@ -5,6 +5,8 @@ import time
 from typing import Optional
 import httpx
 
+from app.enrichment.url_validator import validate_target_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,10 +18,17 @@ class HttpEnrichmentError(Exception):
         self.status_code = status_code
 
 
+class HttpSecurityError(HttpEnrichmentError):
+    """Raised when request is blocked for security/SSRF reasons."""
+
+    pass
+
+
 class HttpTimeoutError(HttpEnrichmentError):
     """Raised when an HTTP request times out."""
 
     pass
+
 
 
 class HttpBlockedError(HttpEnrichmentError):
@@ -90,6 +99,12 @@ class EnrichmentHttpClient:
         Fetch HTML content from a URL asynchronously.
         Returns tuple of (status_code, html_text, headers, duration_ms).
         """
+        # Enforce SSRF & scheme validation
+        is_valid, err_reason = validate_target_url(url)
+        if not is_valid:
+            logger.warning("Rejected unsafe/invalid URL '%s': %s", url, err_reason)
+            raise HttpSecurityError(f"URL validation failed: {err_reason}")
+
         start_time = time.monotonic()
         timeout = httpx.Timeout(
             timeout=self.read_timeout + self.connect_timeout,

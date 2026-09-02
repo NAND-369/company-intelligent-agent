@@ -452,3 +452,43 @@ async def test_pipeline_multi_failure_isolation_e2e(db_session: AsyncSession) ->
     assert v1 is not None
     assert v2 is not None
     assert v3 is not None
+
+
+# ==============================================================================
+# 7. SSRF and URL Security Validation Tests
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_http_enrichment_ssrf_protection_rejects_loopback_and_metadata() -> None:
+    """Verify that EnrichmentHttpClient strictly rejects loopback, private networks, and cloud metadata."""
+    from app.enrichment.http_client import EnrichmentHttpClient, HttpSecurityError
+
+    client = EnrichmentHttpClient()
+
+    forbidden_urls = [
+        "http://127.0.0.1/admin",
+        "http://localhost:8080/metrics",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://10.0.0.5/internal",
+        "http://192.168.1.1/router",
+        "ftp://malicious.com/file",
+        "file:///etc/passwd",
+    ]
+
+    for url in forbidden_urls:
+        with pytest.raises(HttpSecurityError) as exc_info:
+            await client.fetch_html(url)
+        assert "URL validation failed" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_browser_enrichment_ssrf_protection_rejects_private_ips() -> None:
+    """Verify that PlaywrightBrowserClient strictly rejects private/internal URLs before navigation."""
+    from app.enrichment.browser_client import PlaywrightBrowserClient
+    from app.enrichment.http_client import HttpSecurityError
+
+    client = PlaywrightBrowserClient()
+
+    with pytest.raises(HttpSecurityError) as exc_info:
+        await client.render_page("http://127.0.0.1:9000/internal")
+    assert "URL validation failed" in str(exc_info.value)
