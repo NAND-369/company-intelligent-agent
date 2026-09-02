@@ -85,6 +85,36 @@ class MockGoogleSheetsSyncClient:
         self.row_updates[row_index] = updates_by_col_index
         return True
 
+    def find_company_row(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        company_name: str,
+        website_url: Optional[str] = None,
+    ) -> Optional[int]:
+        return None
+
+    def append_row_values(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        updates_by_col_index: dict[int, Any],
+    ) -> int:
+        self.call_count += 1
+        if self.permanent_error:
+            raise self.permanent_error
+        new_row_idx = max(len(self.row_updates) + 2, 2)
+        self.row_updates[new_row_idx] = updates_by_col_index
+        return new_row_idx
+
+    def ensure_header_columns(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        required_headers: list[str],
+    ) -> list[str]:
+        return self.headers
+
 
 # ==============================================================================
 # 1. Column Mapper & Formatting Tests
@@ -279,11 +309,11 @@ async def test_sync_changed_verdict_re_synchronizes(db_session: AsyncSession) ->
 
 @pytest.mark.asyncio
 async def test_sync_failure_isolation_one_bad_company(db_session: AsyncSession) -> None:
-    """Verify that failure on one company (missing row ID) does not block others."""
+    """Verify that failure on one company (missing verdict) does not block others."""
     co_good = await CompanyRepository.create(session=db_session, name="Good Co", website_url="https://good.com", sheet_row_id="row_7", status=CompanyStatus.JUDGED)
-    co_bad = await CompanyRepository.create(session=db_session, name="Bad Co", website_url="https://bad.com", sheet_row_id="", status=CompanyStatus.JUDGED)
+    co_bad = await CompanyRepository.create(session=db_session, name="Bad Co", website_url="https://bad.com", sheet_row_id="row_8", status=CompanyStatus.JUDGED)
     await VerdictRepository.create(session=db_session, company_id=co_good.id, fit=FitDecision.YES, confidence=0.9, reasoning=["Fits"])
-    await VerdictRepository.create(session=db_session, company_id=co_bad.id, fit=FitDecision.YES, confidence=0.9, reasoning=["Fits"])
+    # co_bad has no verdict created -> sync will fail for co_bad while co_good succeeds
     await db_session.commit()
 
     mock_client = MockGoogleSheetsSyncClient()
@@ -468,3 +498,72 @@ async def test_api_sheets_sync_endpoint(async_client: AsyncClient, monkeypatch: 
     assert data["rows_read"] == 2
     assert data["companies_created"] == 1
     assert data["companies_updated"] == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_missing_sheet_row_id_auto_appends_row(db_session: AsyncSession) -> None:
+    """Verify that a company added without sheet_row_id is automatically appended to Google Sheets."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Auto Append Corp",
+        website_url="https://autoappend.io",
+        sheet_row_id=None,
+        status=CompanyStatus.JUDGED,
+    )
+    await VerdictRepository.create(
+        session=db_session,
+        company_id=company.id,
+        fit=FitDecision.YES,
+        confidence=0.98,
+        reasoning=["Enterprise B2B platform."],
+    )
+    await db_session.commit()
+
+    mock_client = MockGoogleSheetsSyncClient()
+    service = SheetsSyncService(session=db_session, client=mock_client)
+
+    result = await service.sync_company(company_id=company.id, spreadsheet_id="test_sheet_id")
+
+    assert result.status == SyncOutcome.SUCCESS
+    assert result.row_index >= 2
+    assert result.sheet_row_id == f"row_{result.row_index}"
+
+    # Verify company updated in database
+    updated = await CompanyRepository.get_by_id(db_session, company.id)
+    assert updated.sheet_row_id == f"row_{result.row_index}"
+    assert updated.status == CompanyStatus.SYNCED
+
+
+@pytest.mark.asyncio
+async def test_sync_failure_does_not_corrupt_or_lose_verdict(db_session: AsyncSession) -> None:
+    """Verify that a Google Sheets API failure logs the error without corrupting or deleting the persisted DB verdict."""
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Fail Sync Corp",
+        website_url="https://failsync.io",
+        sheet_row_id="row_5",
+        status=CompanyStatus.JUDGED,
+    )
+    verdict = await VerdictRepository.create(
+        session=db_session,
+        company_id=company.id,
+        fit=FitDecision.YES,
+        confidence=0.98,
+        reasoning=["Solid B2B enterprise software."],
+    )
+    await db_session.commit()
+
+    failing_client = MockGoogleSheetsSyncClient(permanent_error=GoogleSheetsAPIError("Permission denied: 403"))
+    service = SheetsSyncService(session=db_session, client=failing_client)
+
+    result = await service.sync_company(company_id=company.id, spreadsheet_id="test_sheet_id")
+
+    assert result.status == SyncOutcome.FAILED
+    assert "Permission denied" in result.error_details
+
+    # Verify verdict in database is completely intact
+    latest_verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert latest_verdict is not None
+    assert latest_verdict.id == verdict.id
+    assert latest_verdict.fit == FitDecision.YES
+    assert latest_verdict.confidence == 0.98

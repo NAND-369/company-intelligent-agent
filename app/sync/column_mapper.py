@@ -39,6 +39,21 @@ class SheetColumnMapper:
         """Resolve 1-based column index mapping for all supported output fields."""
         mapping: dict[str, int] = {}
 
+        # 0. Identifying Columns
+        idx = self._find_column_index(
+            self.settings.google_sheets_company_name_col,
+            ["company name", "company", "name", "organization", "company_name"],
+        )
+        if idx:
+            mapping["name"] = idx
+
+        idx = self._find_column_index(
+            self.settings.google_sheets_website_col,
+            ["website", "website url", "url", "domain", "web", "website_url", "link"],
+        )
+        if idx:
+            mapping["website"] = idx
+
         # 1. Status Column
         idx = self._find_column_index(
             self.settings.google_sheets_status_col,
@@ -95,6 +110,20 @@ class SheetColumnMapper:
         """Return the dictionary of field names to 1-based column indices."""
         return self._col_indices
 
+    @property
+    def standard_header_names(self) -> list[str]:
+        """Return canonical list of configured Google Sheet header titles."""
+        return [
+            self.settings.google_sheets_company_name_col,
+            self.settings.google_sheets_website_col,
+            self.settings.google_sheets_status_col,
+            self.settings.google_sheets_fit_col,
+            self.settings.google_sheets_confidence_col,
+            self.settings.google_sheets_reasoning_col,
+            self.settings.google_sheets_follow_up_col,
+            self.settings.google_sheets_last_synced_col,
+        ]
+
     def compute_verdict_fingerprint(self, verdict: Verdict) -> str:
         """Compute a deterministic hash representing the exact verdict output content."""
         payload = {
@@ -110,6 +139,7 @@ class SheetColumnMapper:
         self,
         verdict: Verdict,
         company: Company,
+        include_identifying_fields: bool = False,
     ) -> tuple[dict[int, Any], dict[str, Any]]:
         """
         Format Verdict into cell values and map them to specific column indices.
@@ -125,7 +155,7 @@ class SheetColumnMapper:
 
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
 
-        values_by_field = {
+        values_by_field: dict[str, Any] = {
             "status": "SYNCED",
             "fit": verdict.fit.value if hasattr(verdict.fit, "value") else str(verdict.fit),
             "confidence": f"{verdict.confidence:.2f}",
@@ -133,6 +163,10 @@ class SheetColumnMapper:
             "follow_up_question": verdict.follow_up_question or "",
             "last_synced": now_str,
         }
+
+        if include_identifying_fields:
+            values_by_field["name"] = company.name
+            values_by_field["website"] = company.website_url
 
         updates_by_col_idx: dict[int, Any] = {}
         readable_updates: dict[str, Any] = {}

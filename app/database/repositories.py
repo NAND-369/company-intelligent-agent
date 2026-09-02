@@ -125,6 +125,18 @@ class CompanyRepository:
         return await CompanyRepository.get_by_id(session, company_id)
 
     @staticmethod
+    async def update_sheet_row_id(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        sheet_row_id: str,
+    ) -> Optional[Company]:
+        """Update a company's Google Sheet row reference."""
+        stmt = update(Company).where(Company.id == company_id).values(sheet_row_id=sheet_row_id)
+        await session.execute(stmt)
+        await session.flush()
+        return await CompanyRepository.get_by_id(session, company_id)
+
+    @staticmethod
     async def delete(session: AsyncSession, company_id: uuid.UUID) -> bool:
         """Delete a company and all associated child records (signals, verdicts, sync logs)."""
         await SignalRepository.delete_by_company(session, company_id)

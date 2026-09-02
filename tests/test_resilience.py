@@ -305,6 +305,31 @@ class FailingGoogleSheetsClient(GoogleSheetsClientProtocol):
     ) -> bool:
         raise Exception("Google API 500: Backend error occurred")
 
+    def find_company_row(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        company_name: str,
+        website_url: Optional[str] = None,
+    ) -> Optional[int]:
+        return None
+
+    def append_row_values(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        updates_by_col_index: dict[int, Any],
+    ) -> int:
+        raise Exception("Google API 500: Backend error occurred")
+
+    def ensure_header_columns(
+        self,
+        spreadsheet_id: str,
+        worksheet_name: str,
+        required_headers: list[str],
+    ) -> list[str]:
+        return ["Company Name", "Website", "Status", "Fit", "Confidence", "Reasoning", "Follow-up Question", "Last Synced"]
+
 
 @pytest.mark.asyncio
 async def test_sheets_sync_failure_isolation_and_audit(db_session: AsyncSession) -> None:
