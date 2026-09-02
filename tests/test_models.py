@@ -133,3 +133,35 @@ async def test_pipeline_run_model(db_session: AsyncSession) -> None:
     assert run.total_companies == 5
     assert run.processed_count == 2
     assert run.started_at is not None
+
+
+@pytest.mark.asyncio
+async def test_company_creation_with_null_sheet_row_id(db_session: AsyncSession) -> None:
+    """Regression test: Dashboard-created companies with sheet_row_id=None must persist cleanly."""
+    co1 = Company(
+        name="Dashboard Co 1",
+        website_url="https://dash1.com",
+        domain="dash1.com",
+        sheet_row_id=None,
+        status=CompanyStatus.PENDING,
+    )
+    co2 = Company(
+        name="Dashboard Co 2",
+        website_url="https://dash2.com",
+        domain="dash2.com",
+        sheet_row_id=None,
+        status=CompanyStatus.PENDING,
+    )
+    db_session.add_all([co1, co2])
+    await db_session.commit()
+
+    assert co1.id is not None
+    assert co1.sheet_row_id is None
+    assert co2.id is not None
+    assert co2.sheet_row_id is None
+
+    # Query back from database
+    fetched1 = await db_session.get(Company, co1.id)
+    assert fetched1 is not None
+    assert fetched1.sheet_row_id is None
+    assert fetched1.status == CompanyStatus.PENDING
