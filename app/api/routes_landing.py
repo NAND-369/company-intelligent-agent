@@ -40,1055 +40,205 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      border-radius: 0 !important;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
+    body { background-color: var(--bg); color: var(--text-main); font-family: var(--font-sans); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    body {
-      background-color: var(--bg);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      overflow-x: hidden;
-      width: 100%;
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    /* Focus States for Accessibility */
-    a:focus-visible, button:focus-visible, input:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    /* Consistent Centered Content Container */
-    .container {
-      max-width: 1280px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 0 2rem;
-    }
-
-    /* 12-Column Grid System */
-    .grid-12 {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .col-span-3 { grid-column: span 3; }
-    .col-span-4 { grid-column: span 4; }
-    .col-span-6 { grid-column: span 6; }
-    .col-span-8 { grid-column: span 8; }
-    .col-span-9 { grid-column: span 9; }
-    .col-span-12 { grid-column: span 12; }
+    /* Mathematically Centered Page Container */
+    .container { max-width: 1200px; width: 100%; margin-left: auto; margin-right: auto; padding-left: 2rem; padding-right: 2rem; }
 
     /* Typography */
-    .label-meta {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
+    .label-meta { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); line-height: 1.6; }
+    .label-accent { color: var(--accent); }
+    .mono-text { font-family: var(--font-mono); }
 
-    .label-accent {
-      color: var(--accent);
-    }
+    /* Navigation */
+    nav { position: sticky; top: 0; z-index: 100; background-color: var(--bg); border-bottom: 1px solid var(--border); height: 72px; display: flex; align-items: center; width: 100%; }
+    .nav-inner { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+    .nav-brand { display: flex; align-items: center; gap: 1rem; }
+    .nav-title { font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-main); }
+    .nav-status { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-secondary); background: rgba(255,255,255,0.6); border: 1px solid var(--border); padding: 0.3rem 0.65rem; }
+    .status-dot { display: inline-block; width: 7px; height: 7px; background-color: var(--green); animation: pulseGreen 2s infinite ease-in-out; }
+    @keyframes pulseGreen { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+    .nav-links { display: flex; align-items: center; gap: 1.25rem; }
+    .nav-link { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-secondary); transition: color 0.2s ease; cursor: pointer; }
+    .nav-link:hover { color: var(--accent); }
 
-    .mono-text {
-      font-family: var(--font-mono);
-    }
-
-    /* Sticky Navigation */
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background-color: var(--bg);
-      border-bottom: 1px solid var(--border);
-      height: 72px;
-      display: flex;
-      align-items: center;
-      width: 100%;
-    }
-
-    .nav-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-    }
-
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .nav-title {
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-main);
-    }
-
-    .nav-status {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      background: rgba(255,255,255,0.6);
-      border: 1px solid var(--border);
-      padding: 0.3rem 0.65rem;
-    }
-
-    .status-dot {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      background-color: var(--green);
-      animation: pulseGreen 2s infinite ease-in-out;
-    }
-
-    @keyframes pulseGreen {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-    }
-
-    .nav-link {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      transition: color 0.2s ease;
-      cursor: pointer;
-    }
-
-    .nav-link:hover {
-      color: var(--accent);
-    }
-
-    .key-btn {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 0.45rem 0.85rem;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      min-height: 36px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .key-btn:hover {
-      border-color: var(--text-main);
-      color: var(--text-main);
-      background-color: #FAFAFA;
-    }
+    .key-btn { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.45rem 0.85rem; background: #ffffff; border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+    .key-btn:hover { border-color: var(--text-main); color: var(--text-main); background-color: #FAFAFA; }
 
     /* Hero Section */
-    .hero-section {
-      padding: 4.5rem 0 4rem 0;
-      border-bottom: 1px solid var(--border);
-      width: 100%;
-    }
-
-    .hero-meta-block {
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-    }
-
-    .hero-meta-title {
-      font-size: 13px;
-      font-weight: 700;
-      line-height: 1.4;
-      letter-spacing: 0.1em;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-    }
-
-    .hero-headline {
-      font-size: clamp(2.4rem, 5.5vw, 4.8rem);
-      font-weight: 900;
-      line-height: 0.98;
-      letter-spacing: -0.035em;
-      text-transform: uppercase;
-      color: var(--text-main);
-      margin-bottom: 1.5rem;
-    }
-
-    .hero-headline .accent-word {
-      color: var(--accent);
-    }
-
-    .hero-description {
-      font-size: 17px;
-      line-height: 1.6;
-      color: var(--text-secondary);
-      max-width: 740px;
-      margin-bottom: 2rem;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
+    .hero-section { padding: 4rem 0 3.5rem 0; border-bottom: 1px solid var(--border); width: 100%; }
+    .hero-kicker { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .hero-headline { font-size: clamp(2.4rem, 5.5vw, 4.5rem); font-weight: 900; line-height: 0.98; letter-spacing: -0.035em; text-transform: uppercase; color: var(--text-main); margin-bottom: 1.5rem; }
+    .hero-headline .accent-word { color: var(--accent); }
+    .hero-description { font-size: 17px; line-height: 1.6; color: var(--text-secondary); max-width: 820px; margin-bottom: 2rem; }
+    .hero-actions { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 
     /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.85rem 1.75rem;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      border: 1px solid transparent;
-      cursor: pointer;
-      min-height: 44px;
-      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-      user-select: none;
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed !important;
-    }
-
-    .btn-primary {
-      background-color: var(--accent);
-      color: #ffffff;
-      border-color: var(--accent);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background-color: var(--accent-hover);
-      border-color: var(--accent-hover);
-    }
-
-    .btn-secondary {
-      background-color: var(--text-main);
-      color: #ffffff;
-      border-color: var(--text-main);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-      background-color: #2B2A2A;
-      border-color: #2B2A2A;
-    }
-
-    .btn-outline {
-      background-color: transparent;
-      color: var(--text-main);
-      border-color: var(--text-main);
-    }
-
-    .btn-outline:hover:not(:disabled) {
-      background-color: var(--text-main);
-      color: #ffffff;
-    }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.85rem 1.75rem; font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; border: 1px solid transparent; cursor: pointer; min-height: 44px; transition: background-color 0.2s ease, color 0.2s ease; user-select: none; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed !important; }
+    .btn-primary { background-color: var(--accent); color: #ffffff; border-color: var(--accent); }
+    .btn-primary:hover:not(:disabled) { background-color: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-secondary { background-color: var(--text-main); color: #ffffff; border-color: var(--text-main); }
+    .btn-secondary:hover:not(:disabled) { background-color: #2B2A2A; border-color: #2B2A2A; }
+    .btn-outline { background-color: transparent; color: var(--text-main); border-color: var(--text-main); }
+    .btn-outline:hover:not(:disabled) { background-color: var(--text-main); color: #ffffff; }
 
     /* Live System Strip */
-    .system-strip {
-      border-bottom: 1px solid var(--border);
-      background-color: var(--bg);
-      width: 100%;
-    }
-
-    .strip-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-    }
-
-    .strip-item {
-      padding: 1.15rem 1.25rem;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .strip-item:last-child {
-      border-right: none;
-    }
-
-    .strip-item .strip-val {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      color: var(--text-main);
-    }
+    .system-strip { border-bottom: 1px solid var(--border); background-color: var(--bg); width: 100%; }
+    .strip-grid { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .strip-item { padding: 1.15rem 1.25rem; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.35rem; }
+    .strip-item:last-child { border-right: none; }
+    .strip-item .strip-val { font-family: var(--font-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-main); }
 
     /* Section Structure */
-    .section-wrap {
-      padding: 4.5rem 0;
-      border-bottom: 1px solid var(--border);
-      width: 100%;
-    }
-
-    .section-heading-large {
-      font-size: clamp(1.9rem, 3.5vw, 3rem);
-      font-weight: 900;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      text-transform: uppercase;
-      margin-bottom: 1.25rem;
-    }
-
-    .section-subtext {
-      font-size: 15px;
-      color: var(--text-secondary);
-      max-width: 680px;
-      margin-bottom: 1.75rem;
-      line-height: 1.6;
-    }
+    .section-wrap { padding: 3.5rem 0; border-bottom: 1px solid var(--border); width: 100%; }
+    .section-kicker { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .section-heading-large { font-size: clamp(1.9rem, 3.5vw, 2.75rem); font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; text-transform: uppercase; margin-bottom: 0.75rem; }
+    .section-subtext { font-size: 15px; color: var(--text-secondary); max-width: 800px; margin-bottom: 1.75rem; line-height: 1.6; }
 
     /* Form Controls */
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-      margin-bottom: 1.15rem;
-    }
-
-    .form-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-
-    .form-input {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      padding: 0.75rem 1rem;
-      min-height: 44px;
-      background-color: #ffffff;
-      border: 1px solid var(--border);
-      color: var(--text-main);
-      outline: none;
-      transition: border-color 0.2s ease;
-      width: 100%;
-    }
-
-    .form-input:focus {
-      border-color: var(--accent);
-    }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.15rem; }
+    .form-label { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-secondary); }
+    .form-input { font-family: var(--font-mono); font-size: 14px; padding: 0.75rem 1rem; min-height: 44px; background-color: #ffffff; border: 1px solid var(--border); color: var(--text-main); outline: none; transition: border-color 0.2s ease; width: 100%; }
+    .form-input:focus { border-color: var(--accent); }
 
     /* Dual Input Source Grid */
-    .source-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-    }
-
-    .source-card {
-      border: 1px solid var(--border);
-      background-color: var(--surface);
-      padding: 1.75rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 380px;
-    }
-
-    .source-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .source-badge {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      padding: 0.25rem 0.5rem;
-      border: 1px solid var(--border);
-      background: var(--bg);
-    }
+    .source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .source-card { border: 1px solid var(--border); background-color: var(--surface); padding: 1.75rem; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; }
+    .source-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    .source-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.25rem 0.5rem; border: 1px solid var(--border); background: var(--bg); }
 
     /* Alert / Notification Box */
-    .alert-box {
-      padding: 0.9rem 1.15rem;
-      border: 1px solid var(--border);
-      background-color: #ffffff;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.5;
-      margin-top: 1rem;
-      display: none;
-    }
-
-    .alert-box.success {
-      display: block;
-      border-color: var(--green);
-      color: var(--green-dark);
-      background-color: var(--green-light);
-    }
-
-    .alert-box.error {
-      display: block;
-      border-color: var(--red);
-      color: var(--red-dark);
-      background-color: var(--red-light);
-    }
+    .alert-box { padding: 0.9rem 1.15rem; border: 1px solid var(--border); background-color: #ffffff; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; margin-top: 1rem; display: none; }
+    .alert-box.success { display: block; border-color: var(--green); color: var(--green-dark); background-color: var(--green-light); }
+    .alert-box.error { display: block; border-color: var(--red); color: var(--red-dark); background-color: var(--red-light); }
 
     /* Working List Table Container */
-    .table-container {
-      border: 1px solid var(--border);
-      background-color: var(--surface);
-      overflow-x: auto;
-      margin-top: 1.25rem;
-      width: 100%;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 14px;
-      min-width: 650px;
-    }
-
-    th {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background-color: var(--bg);
-      white-space: nowrap;
-    }
-
-    td {
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--border);
-      color: var(--text-main);
-      vertical-align: middle;
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover td {
-      background-color: #FAFAFA;
-    }
+    .table-container { border: 1px solid var(--border); background-color: var(--surface); overflow-x: auto; margin-top: 1.25rem; width: 100%; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; min-width: 720px; }
+    th { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); background-color: var(--bg); white-space: nowrap; }
+    td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-main); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: #FAFAFA; }
 
     /* Badges */
-    .badge {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      padding: 0.2rem 0.55rem;
-      text-transform: uppercase;
-      border: 1px solid var(--border);
-      white-space: nowrap;
-    }
-
-    .badge-yes {
-      background-color: var(--green-light);
-      color: var(--green-dark);
-      border-color: #A7F3D0;
-    }
-
-    .badge-no {
-      background-color: var(--red-light);
-      color: var(--red-dark);
-      border-color: #FECACA;
-    }
-
-    .badge-uncertain {
-      background-color: var(--amber-light);
-      color: var(--amber-dark);
-      border-color: #FDE68A;
-    }
-
-    .badge-synced {
-      background-color: var(--accent-light);
-      color: #1E40AF;
-      border-color: #BFDBFE;
-    }
-
-    .badge-pending {
-      background-color: #F3F4F6;
-      color: #374151;
-      border-color: #E5E7EB;
-    }
-
-    .badge-failed {
-      background-color: var(--red-light);
-      color: var(--red-dark);
-      border-color: #FECACA;
-    }
+    .badge { display: inline-block; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; padding: 0.25rem 0.6rem; text-transform: uppercase; border: 1px solid var(--border); white-space: nowrap; }
+    .badge-yes { background-color: var(--green-light); color: var(--green-dark); border-color: #A7F3D0; }
+    .badge-no { background-color: var(--red-light); color: var(--red-dark); border-color: #FECACA; }
+    .badge-uncertain { background-color: var(--amber-light); color: var(--amber-dark); border-color: #FDE68A; }
+    .badge-synced { background-color: var(--accent-light); color: #1E40AF; border-color: #BFDBFE; }
+    .badge-pending { background-color: #F3F4F6; color: #374151; border-color: #E5E7EB; }
+    .badge-failed { background-color: var(--red-light); color: var(--red-dark); border-color: #FECACA; }
 
     /* Interactive Pipeline Running Monitor */
-    .monitor-box {
-      border: 1px solid var(--border-dark);
-      background-color: var(--surface);
-      padding: 1.75rem;
-      margin-top: 1.5rem;
-      display: none;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    }
-
-    .monitor-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .monitor-title {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-
-    .monitor-status {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      padding: 0.35rem 0.85rem;
-      border: 1px solid var(--border);
-    }
-
-    .status-running {
-      background-color: var(--accent-light);
-      color: #1E40AF;
-      border-color: #BFDBFE;
-      animation: pulseRunning 2s infinite ease-in-out;
-    }
-
-    @keyframes pulseRunning {
-      0%, 100% { border-color: #BFDBFE; }
-      50% { border-color: var(--accent); }
-    }
-
-    .status-completed {
-      background-color: var(--green-light);
-      color: var(--green-dark);
-      border-color: #A7F3D0;
-    }
-
-    .status-failed {
-      background-color: var(--red-light);
-      color: var(--red-dark);
-      border-color: #FECACA;
-    }
+    .monitor-box { border: 1px solid var(--border-dark); background-color: var(--surface); padding: 1.75rem; margin-top: 1.5rem; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .monitor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .monitor-title { font-family: var(--font-mono); font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 0.6rem; }
+    .monitor-status { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; padding: 0.35rem 0.85rem; border: 1px solid var(--border); }
+    .status-running { background-color: var(--accent-light); color: #1E40AF; border-color: #BFDBFE; animation: pulseRunning 2s infinite ease-in-out; }
+    @keyframes pulseRunning { 0%, 100% { border-color: #BFDBFE; } 50% { border-color: var(--accent); } }
+    .status-completed { background-color: var(--green-light); color: var(--green-dark); border-color: #A7F3D0; }
+    .status-failed { background-color: var(--red-light); color: var(--red-dark); border-color: #FECACA; }
 
     /* Polished Pipeline Stepper Nodes */
-    .pipeline-stepper {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 0.75rem;
-      margin: 1.25rem 0 1.75rem 0;
-      position: relative;
-    }
+    .pipeline-stepper { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin: 1.25rem 0 1.75rem 0; position: relative; }
+    .stepper-node { border: 1px solid var(--border); background-color: var(--bg); padding: 0.9rem 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; transition: all 0.3s ease; position: relative; }
+    .stepper-node.active { border-color: var(--accent); background-color: #ffffff; box-shadow: 0 0 0 1px var(--accent); }
+    .stepper-node.active .stepper-node-dot { color: var(--accent); font-weight: 800; }
+    .stepper-node.done { border-color: var(--green); background-color: #ffffff; }
+    .stepper-node.done .stepper-node-dot { color: var(--green); font-weight: 800; }
+    .stepper-node-dot { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+    .stepper-node-label { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-main); line-height: 1.3; }
 
-    .stepper-node {
-      border: 1px solid var(--border);
-      background-color: var(--bg);
-      padding: 0.9rem 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-
-    .stepper-node.active {
-      border-color: var(--accent);
-      background-color: #ffffff;
-      box-shadow: 0 0 0 1px var(--accent);
-    }
-
-    .stepper-node.active .stepper-node-dot {
-      color: var(--accent);
-      font-weight: 800;
-    }
-
-    .stepper-node.done {
-      border-color: var(--green);
-      background-color: #ffffff;
-    }
-
-    .stepper-node.done .stepper-node-dot {
-      color: var(--green);
-      font-weight: 800;
-    }
-
-    .stepper-node-dot {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .stepper-node-label {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--text-main);
-      line-height: 1.3;
-    }
-
-    /* Active Pulse Animation */
-    .node-pulse-indicator {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      background-color: var(--accent);
-      animation: pulseDot 1.2s infinite ease-in-out;
-    }
-
-    @keyframes pulseDot {
-      0%, 100% { opacity: 1; transform: scale(1.3); }
-      50% { opacity: 0.3; transform: scale(0.7); }
-    }
+    .node-pulse-indicator { display: inline-block; width: 6px; height: 6px; background-color: var(--accent); animation: pulseDot 1.2s infinite ease-in-out; }
+    @keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1.3); } 50% { opacity: 0.3; transform: scale(0.7); } }
 
     /* Progress Bar */
-    .progress-bar-container {
-      margin: 1.25rem 0 1.5rem 0;
-      padding: 1rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-    }
-
-    .progress-bar-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .progress-bar-track {
-      width: 100%;
-      height: 8px;
-      background-color: #d6d5d1;
-      border: 1px solid var(--border);
-      overflow: hidden;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      width: 0%;
-      background-color: var(--accent);
-      transition: width 0.4s ease;
-    }
-
-    .progress-bar-fill.done {
-      background-color: var(--green);
-    }
+    .progress-bar-container { margin: 1.25rem 0 1.5rem 0; padding: 1rem; background: var(--bg); border: 1px solid var(--border); }
+    .progress-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .progress-bar-track { width: 100%; height: 8px; background-color: #d6d5d1; border: 1px solid var(--border); overflow: hidden; }
+    .progress-bar-fill { height: 100%; width: 0%; background-color: var(--accent); transition: width 0.4s ease; }
+    .progress-bar-fill.done { background-color: var(--green); }
 
     /* Company Evaluation Live Feed */
-    .pipeline-live-feed {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border);
-    }
-
-    .feed-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.5rem 0.75rem;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
+    .pipeline-live-feed { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0.85rem; background: #ffffff; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; }
 
     /* Metrics Grid */
-    .metrics-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 1rem;
-      margin-top: 1.25rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid var(--border);
-    }
+    .metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+    .metric-cell { display: flex; flex-direction: column; gap: 0.25rem; }
+    .metric-label { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); }
+    .metric-val { font-family: var(--font-mono); font-size: 18px; font-weight: 800; color: var(--text-main); }
 
-    .metric-cell {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .metric-label {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    .metric-val {
-      font-family: var(--font-mono);
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--text-main);
-    }
-
-    /* Verdict Result Cards with Progressive Reveal */
-    .verdicts-list {
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      margin-top: 1.25rem;
-    }
-
-    .verdict-card {
-      border: 1px solid var(--border);
-      background-color: var(--surface);
-      padding: 1.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      animation: revealCard 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    @keyframes revealCard {
-      from {
-        opacity: 0;
-        transform: translateY(6px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .verdict-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.75rem;
-    }
-
-    .verdict-co-name {
-      font-size: 1.35rem;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      text-transform: uppercase;
-    }
-
-    .verdict-co-url {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-left: 0.75rem;
-    }
-
-    .verdict-decision-grid {
-      display: grid;
-      grid-template-columns: 140px 140px 1fr;
-      gap: 1.25rem;
-      padding: 0.5rem 0;
-    }
-
-    .verdict-block-title {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 0.35rem;
-    }
-
-    .reasoning-list {
-      margin-top: 0.35rem;
-      padding-left: 1.25rem;
-      color: var(--text-secondary);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    .reasoning-list li {
-      margin-bottom: 0.35rem;
-    }
-
-    .followup-box {
-      margin-top: 0.5rem;
-      padding: 0.85rem 1rem;
-      background-color: var(--bg);
-      border-left: 3px solid var(--accent);
-      font-size: 13.5px;
-      color: var(--text-main);
-      line-height: 1.5;
-    }
+    /* Verdict Result Cards */
+    .verdicts-list { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 1.25rem; }
+    .verdict-card { border: 1px solid var(--border); background-color: var(--surface); padding: 1.75rem; display: flex; flex-direction: column; gap: 1rem; animation: revealCard 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes revealCard { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .verdict-top { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; }
+    .verdict-co-name { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; text-transform: uppercase; }
+    .verdict-co-url { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-left: 0.75rem; }
+    .verdict-decision-grid { display: grid; grid-template-columns: 140px 140px 1fr; gap: 1.25rem; padding: 0.5rem 0; }
+    .verdict-block-title { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem; }
+    .reasoning-list { margin-top: 0.35rem; padding-left: 1.25rem; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+    .reasoning-list li { margin-bottom: 0.35rem; }
+    .followup-box { margin-top: 0.5rem; padding: 0.85rem 1rem; background-color: var(--bg); border-left: 3px solid var(--accent); font-size: 13.5px; color: var(--text-main); line-height: 1.5; }
 
     /* Pipeline Sequence Section */
-    .pipeline-container {
-      display: flex;
-      flex-direction: column;
-      border-top: 1px solid var(--border);
-    }
-
-    .pipeline-row {
-      display: grid;
-      grid-template-columns: 80px 1fr 1fr;
-      align-items: baseline;
-      padding: 1.15rem 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .pipeline-num {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-      letter-spacing: 0.1em;
-    }
-
-    .pipeline-name {
-      font-size: 15px;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .pipeline-desc {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
+    .pipeline-container { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+    .pipeline-row { display: grid; grid-template-columns: 80px 1fr 1fr; align-items: baseline; padding: 1.15rem 0; border-bottom: 1px solid var(--border); }
+    .pipeline-num { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+    .pipeline-name { font-size: 15px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+    .pipeline-desc { font-size: 14px; color: var(--text-secondary); }
 
     /* Footer */
-    footer {
-      padding: 3.5rem 0;
-      background-color: var(--bg);
-      border-top: 1px solid var(--border);
-      width: 100%;
-    }
+    footer { padding: 3.5rem 0; background-color: var(--bg); border-top: 1px solid var(--border); width: 100%; }
+    .footer-grid { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); }
+    .footer-brand { color: var(--text-main); }
 
-    .footer-grid {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 1.5rem;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    .footer-brand {
-      color: var(--text-main);
-    }
-
-    /* ===================================================
-       RESPONSIVE BREAKPOINTS & MOBILE REFINEMENT
-       =================================================== */
-
+    /* Responsive Breakpoints */
     @media (max-width: 1024px) {
-      .grid-12 {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-      }
-      .col-span-3, .col-span-4, .col-span-6, .col-span-8, .col-span-9, .col-span-12 {
-        grid-column: span 1;
-      }
-      .strip-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .strip-item:nth-child(2n) {
-        border-right: none;
-      }
-      .strip-item {
-        border-bottom: 1px solid var(--border);
-      }
-      .pipeline-stepper {
-        grid-template-columns: repeat(3, 1fr);
-      }
-      .source-grid {
-        grid-template-columns: 1fr;
-      }
-      .verdict-decision-grid {
-        grid-template-columns: 1fr;
-      }
+      .strip-grid { grid-template-columns: repeat(2, 1fr); }
+      .strip-item:nth-child(2n) { border-right: none; }
+      .strip-item { border-bottom: 1px solid var(--border); }
+      .pipeline-stepper { grid-template-columns: repeat(3, 1fr); }
+      .source-grid { grid-template-columns: 1fr; }
+      .verdict-decision-grid { grid-template-columns: 1fr; }
     }
-
     @media (max-width: 768px) {
-      .container {
-        padding: 0 1.25rem;
-      }
-      nav {
-        height: auto;
-        padding: 0.85rem 0;
-      }
-      .nav-inner {
-        flex-direction: column;
-        gap: 0.75rem;
-        align-items: flex-start;
-      }
-      .nav-brand {
-        width: 100%;
-        justify-content: space-between;
-      }
-      .nav-links {
-        width: 100%;
-        justify-content: flex-start;
-        padding-top: 0.5rem;
-        border-top: 1px solid rgba(0,0,0,0.08);
-      }
-      .hero-section {
-        padding: 3rem 0 2.5rem 0;
-      }
-      .hero-headline {
-        font-size: clamp(2.2rem, 8vw, 3.4rem);
-      }
-      .hero-actions {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      .hero-actions .btn {
-        width: 100%;
-      }
-      .section-wrap {
-        padding: 3rem 0;
-      }
-      .source-card {
-        padding: 1.25rem;
-        min-height: auto;
-      }
-      .pipeline-stepper {
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
-      }
-      .pipeline-row {
-        grid-template-columns: 50px 1fr;
-        gap: 0.5rem;
-      }
-      .pipeline-desc {
-        grid-column: span 2;
-        margin-top: 0.25rem;
-      }
-      .footer-grid {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-      }
-      .verdict-top {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.35rem;
-      }
-      .verdict-co-url {
-        margin-left: 0;
-      }
-      .pipeline-controls-bar {
-        flex-direction: column;
-        align-items: stretch !important;
-      }
-      .pipeline-controls-bar button {
-        width: 100%;
-      }
+      .container { padding-left: 1.25rem; padding-right: 1.25rem; }
+      nav { height: auto; padding: 0.85rem 0; }
+      .nav-inner { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+      .nav-brand { width: 100%; justify-content: space-between; }
+      .nav-links { width: 100%; justify-content: flex-start; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.08); }
+      .hero-section { padding: 3rem 0 2.5rem 0; }
+      .hero-headline { font-size: clamp(2.2rem, 8vw, 3.4rem); }
+      .hero-actions { flex-direction: column; align-items: stretch; }
+      .hero-actions .btn { width: 100%; }
+      .section-wrap { padding: 2.5rem 0; }
+      .source-card { padding: 1.25rem; min-height: auto; }
+      .pipeline-stepper { grid-template-columns: 1fr; gap: 0.5rem; }
+      .pipeline-row { grid-template-columns: 50px 1fr; gap: 0.5rem; }
+      .pipeline-desc { grid-column: span 2; margin-top: 0.25rem; }
+      .footer-grid { flex-direction: column; align-items: flex-start; gap: 1rem; }
+      .verdict-top { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+      .verdict-co-url { margin-left: 0; }
+      .pipeline-controls-bar { flex-direction: column; align-items: stretch !important; }
+      .pipeline-controls-bar button { width: 100%; }
     }
-
     @media (max-width: 480px) {
-      .container {
-        padding: 0 1rem;
-      }
-      .strip-grid {
-        grid-template-columns: 1fr;
-      }
-      .strip-item {
-        border-right: none;
-      }
-      .hero-headline {
-        font-size: 2.1rem;
-      }
-      .section-heading-large {
-        font-size: 1.75rem;
-      }
-      .verdict-card {
-        padding: 1.25rem;
-      }
+      .container { padding-left: 1rem; padding-right: 1rem; }
+      .strip-grid { grid-template-columns: 1fr; }
+      .strip-item { border-right: none; }
+      .hero-headline { font-size: 2.1rem; }
+      .section-heading-large { font-size: 1.75rem; }
+      .verdict-card { padding: 1.25rem; }
     }
-
-    /* Accessibility: Reduced Motion Support */
     @media (prefers-reduced-motion: reduce) {
-      *, ::before, ::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-      }
-      .status-dot, .node-pulse-indicator, .status-running {
-        animation: none !important;
-      }
+      *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+      .status-dot, .node-pulse-indicator, .status-running { animation: none !important; }
     }
   </style>
 </head>
@@ -1114,30 +264,21 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- HERO SECTION -->
   <header class="hero-section">
     <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3 hero-meta-block">
-          <div class="label-meta">00 / INTELLIGENCE SYSTEM</div>
-          <div class="hero-meta-title">
-            PRODUCTION<br>
-            AUTONOMOUS<br>
-            COMPANY<br>
-            RESEARCH
-          </div>
-        </div>
-        <div class="col-span-9">
-          <h1 class="hero-headline">
-            COMPANIES IN.<br>
-            <span class="accent-word">JUDGMENT</span> OUT.
-          </h1>
-          <p class="hero-description">
-            An autonomous company-intelligence pipeline that collects multi-source independent evidence, evaluates it with Gemini 3.1 Flash-Lite, persists verdicts in PostgreSQL, and synchronizes decisions back to Google Sheets.
-          </p>
-          <div class="hero-actions">
-            <button class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE NOW</button>
-            <button class="btn btn-secondary" onclick="syncFromGoogleSheet()">SYNC FROM SHEET</button>
-            <a href="/docs" class="btn btn-outline">EXPLORE API</a>
-          </div>
-        </div>
+      <div class="hero-kicker">
+        <span class="label-meta">00 / INTELLIGENCE SYSTEM</span>
+        <span class="label-meta label-accent">AUTONOMOUS DISCOVERY &amp; EVALUATION</span>
+      </div>
+      <h1 class="hero-headline">
+        COMPANIES IN.<br>
+        <span class="accent-word">JUDGMENT</span> OUT.
+      </h1>
+      <p class="hero-description">
+        An autonomous company-intelligence pipeline that collects multi-source independent evidence, evaluates it with Gemini 3.1 Flash-Lite, persists verdicts in PostgreSQL, and synchronizes decisions back to Google Sheets.
+      </p>
+      <div class="hero-actions">
+        <button class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE NOW</button>
+        <button class="btn btn-secondary" onclick="syncFromGoogleSheet()">SYNC FROM SHEET</button>
+        <a href="/docs" class="btn btn-outline">EXPLORE API</a>
       </div>
     </div>
   </header>
@@ -1173,68 +314,65 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- 01 / INPUT SOURCES SECTION -->
   <section class="section-wrap">
     <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">01 / INPUT SOURCES</div>
-        </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">ADD COMPANIES</h2>
-          <p class="section-subtext">
-            Ingest companies from either source. Both input flows converge into the same active working list and evaluate through the single company intelligence pipeline.
-          </p>
+      <div class="section-kicker">
+        <span class="label-meta">01 / INPUT SOURCES</span>
+        <span class="label-meta label-accent">DUAL INGESTION PIPELINE</span>
+      </div>
+      <h2 class="section-heading-large">ADD COMPANIES</h2>
+      <p class="section-subtext">
+        Ingest companies from either source. Both input flows converge into the same active working list and evaluate through the single company intelligence pipeline.
+      </p>
 
-          <div class="source-grid">
-            <!-- SOURCE A: MANUAL URL INPUT -->
-            <div class="source-card">
-              <div>
-                <div class="source-card-header">
-                  <span class="label-meta">SOURCE A &bull; MANUAL INPUT</span>
-                  <span class="source-badge">URL / FORM</span>
-                </div>
-                <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">ADD COMPANY MANUALLY</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
-                  Enter a company name and target website URL to stage directly into the working list.
-                </p>
-                <form id="addCompanyForm" onsubmit="handleAddCompany(event)">
-                  <div class="form-group">
-                    <label class="form-label" for="compName">Company Name</label>
-                    <input class="form-input" type="text" id="compName" placeholder="e.g. Anthropic" required />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="compUrl">Website URL</label>
-                    <input class="form-input" type="url" id="compUrl" placeholder="https://www.anthropic.com" required />
-                  </div>
-                  <button type="submit" id="addCompBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.25rem;">ADD COMPANY</button>
-                </form>
-              </div>
-              <div id="addCompanyNotice" class="alert-box"></div>
+      <div class="source-grid">
+        <!-- SOURCE A: MANUAL URL INPUT -->
+        <div class="source-card">
+          <div>
+            <div class="source-card-header">
+              <span class="label-meta">SOURCE A &bull; MANUAL INPUT</span>
+              <span class="source-badge">URL / FORM</span>
             </div>
-
-            <!-- SOURCE B: GOOGLE SHEETS -->
-            <div class="source-card">
-              <div>
-                <div class="source-card-header">
-                  <span class="label-meta">SOURCE B &bull; GOOGLE SHEETS</span>
-                  <span class="source-badge" style="background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE;">CONNECTED: ✓</span>
-                </div>
-                <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">SYNC FROM GOOGLE SHEETS</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
-                  Pull new or updated company rows from the configured worksheet into the working list.
-                </p>
-                <div style="background: var(--bg); border: 1px solid var(--border); padding: 0.9rem; margin-bottom: 1.15rem;">
-                  <div class="label-meta" style="margin-bottom: 0.25rem;">TARGET WORKSHEET</div>
-                  <div style="font-family: var(--font-mono); font-size: 13.5px; font-weight: 700;">
-                    Companies &bull; <span style="color: var(--green);">● ONLINE</span>
-                  </div>
-                </div>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
-                  Preserves existing row associations and prepares queued companies for pipeline judgment.
-                </p>
-                <button id="syncSheetBtn" class="btn btn-secondary" onclick="syncFromGoogleSheet()" style="width: 100%;">SYNC FROM GOOGLE SHEETS</button>
+            <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">ADD COMPANY MANUALLY</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+              Enter a company name and target website URL to stage directly into the working list.
+            </p>
+            <form id="addCompanyForm" onsubmit="handleAddCompany(event)">
+              <div class="form-group">
+                <label class="form-label" for="compName">Company Name</label>
+                <input class="form-input" type="text" id="compName" placeholder="e.g. Anthropic" required />
               </div>
-              <div id="sheetSyncNotice" class="alert-box"></div>
-            </div>
+              <div class="form-group">
+                <label class="form-label" for="compUrl">Website URL</label>
+                <input class="form-input" type="url" id="compUrl" placeholder="https://www.anthropic.com" required />
+              </div>
+              <button type="submit" id="addCompBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.25rem;">ADD COMPANY</button>
+            </form>
           </div>
+          <div id="addCompanyNotice" class="alert-box"></div>
+        </div>
+
+        <!-- SOURCE B: GOOGLE SHEETS -->
+        <div class="source-card">
+          <div>
+            <div class="source-card-header">
+              <span class="label-meta">SOURCE B &bull; GOOGLE SHEETS</span>
+              <span class="source-badge" style="background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE;">CONNECTED: &check;</span>
+            </div>
+            <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">SYNC FROM GOOGLE SHEETS</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+              Pull new or updated company rows from the configured worksheet into the working list.
+            </p>
+            <div style="background: var(--bg); border: 1px solid var(--border); padding: 0.9rem; margin-bottom: 1.15rem;">
+              <div class="label-meta" style="margin-bottom: 0.25rem;">TARGET WORKSHEET</div>
+              <div style="font-family: var(--font-mono); font-size: 13.5px; font-weight: 700;">
+                Companies &bull; <span style="color: var(--green);">&bull; ONLINE</span>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
+              Preserves existing row associations and prepares queued companies for pipeline judgment.
+            </p>
+            <button id="syncSheetBtn" class="btn btn-secondary" onclick="syncFromGoogleSheet()" style="width: 100%;">SYNC FROM GOOGLE SHEETS</button>
+          </div>
+          <div id="sheetSyncNotice" class="alert-box"></div>
         </div>
       </div>
     </div>
@@ -1243,151 +381,149 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- 02 / CURRENT WORKING LIST & EXECUTION SECTION -->
   <section class="section-wrap">
     <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">02 / WORKING LIST</div>
+      <div class="section-kicker">
+        <span class="label-meta">02 / WORKING LIST &amp; EXECUTION</span>
+        <span class="label-meta label-accent">PERSISTED DATABASE STATE</span>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h2 class="section-heading-large" style="margin-bottom: 0.25rem;">CURRENT WORKING LIST</h2>
+          <div class="mono-text" style="font-size: 13px; color: var(--text-muted);">
+            <span id="workingListCountBadge" class="badge badge-synced" style="font-size: 11px; margin-right: 0.5rem;">0 COMPANIES</span>
+            Staged companies showing real-time PostgreSQL persisted verdict and sync status.
+          </div>
         </div>
-        <div class="col-span-9">
-          <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
-            <div>
-              <h2 class="section-heading-large" style="margin-bottom: 0.25rem;">CURRENT WORKING LIST</h2>
-              <div class="mono-text" style="font-size: 13px; color: var(--text-muted);">
-                <span id="workingListCountBadge" class="badge badge-synced" style="font-size: 11px; margin-right: 0.5rem;">0 COMPANIES</span>
-                Staged for evaluation through the single intelligence pipeline
-              </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="key-btn" onclick="loadPersistedCompanies(true)">↻ REFRESH DB</button>
+          <button class="key-btn" onclick="clearSessionCompanies()">CLEAR LIST</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 44px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(event)" checked /></th>
+              <th>Company &bull; Domain</th>
+              <th>Source / Row ID</th>
+              <th>Evaluation Decision</th>
+              <th>Google Sheets Sync</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="companiesTableBody">
+            <tr>
+              <td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or click "SYNC FROM GOOGLE SHEETS" above.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pipeline Execution Trigger Controls -->
+      <div class="pipeline-controls-bar" style="margin-top: 1.5rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; background: #ffffff; border: 1px solid var(--border); padding: 1.5rem;">
+        <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()" style="padding: 0.95rem 2.25rem; font-size: 13px;">RUN PIPELINE</button>
+        <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already evaluated companies
+        </label>
+      </div>
+
+      <!-- Interactive Pipeline Running Monitor -->
+      <div id="pipelineMonitor" class="monitor-box">
+        <div class="monitor-header">
+          <div>
+            <div class="monitor-title">
+              <span class="node-pulse-indicator" id="monitorPulseDot"></span>
+              <span id="monitorStatusText">PIPELINE RUNNING</span>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="key-btn" onclick="clearSessionCompanies()">CLEAR LIST</button>
-            </div>
+            <div class="mono-text" id="runIdDisplay" style="font-size: 11.5px; color: var(--text-muted); margin-top: 0.35rem;"></div>
           </div>
+          <div id="runStatusBadge" class="monitor-status status-running">INITIALIZING</div>
+        </div>
 
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width: 44px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(event)" checked /></th>
-                  <th>Company</th>
-                  <th>Website</th>
-                  <th>Source / Row ID</th>
-                  <th>Status</th>
-                  <th>Fit</th>
-                  <th>Confidence</th>
-                </tr>
-              </thead>
-              <tbody id="companiesTableBody">
-                <tr>
-                  <td colspan="7" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or sync from Google Sheets above.</td>
-                </tr>
-              </tbody>
-            </table>
+        <!-- Connected Stepper Nodes -->
+        <div class="pipeline-stepper">
+          <div id="stepDiscovery" class="stepper-node">
+            <div class="stepper-node-dot">
+              <span>01</span>
+              <span class="step-icon">&bull;</span>
+            </div>
+            <div class="stepper-node-label">DISCOVERY</div>
           </div>
-
-          <!-- Pipeline Execution Trigger Controls -->
-          <div class="pipeline-controls-bar" style="margin-top: 1.5rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; background: #ffffff; border: 1px solid var(--border); padding: 1.5rem;">
-            <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()" style="padding: 0.95rem 2.25rem; font-size: 13px;">RUN PIPELINE</button>
-            <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
-              <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already evaluated companies
-            </label>
+          <div id="stepResearch" class="stepper-node">
+            <div class="stepper-node-dot">
+              <span>02</span>
+              <span class="step-icon">&bull;</span>
+            </div>
+            <div class="stepper-node-label">RESEARCH</div>
           </div>
-
-          <!-- Interactive Pipeline Running Monitor -->
-          <div id="pipelineMonitor" class="monitor-box">
-            <div class="monitor-header">
-              <div>
-                <div class="monitor-title">
-                  <span class="node-pulse-indicator" id="monitorPulseDot"></span>
-                  <span id="monitorStatusText">PIPELINE RUNNING</span>
-                </div>
-                <div class="mono-text" id="runIdDisplay" style="font-size: 11.5px; color: var(--text-muted); margin-top: 0.35rem;"></div>
-              </div>
-              <div id="runStatusBadge" class="monitor-status status-running">INITIALIZING</div>
+          <div id="stepSignals" class="stepper-node">
+            <div class="stepper-node-dot">
+              <span>03</span>
+              <span class="step-icon">&bull;</span>
             </div>
-
-            <!-- Connected Stepper Nodes -->
-            <div class="pipeline-stepper">
-              <div id="stepDiscovery" class="stepper-node">
-                <div class="stepper-node-dot">
-                  <span>01</span>
-                  <span class="step-icon">&bull;</span>
-                </div>
-                <div class="stepper-node-label">DISCOVERY</div>
-              </div>
-              <div id="stepResearch" class="stepper-node">
-                <div class="stepper-node-dot">
-                  <span>02</span>
-                  <span class="step-icon">&bull;</span>
-                </div>
-                <div class="stepper-node-label">RESEARCH</div>
-              </div>
-              <div id="stepSignals" class="stepper-node">
-                <div class="stepper-node-dot">
-                  <span>03</span>
-                  <span class="step-icon">&bull;</span>
-                </div>
-                <div class="stepper-node-label">SIGNALS</div>
-              </div>
-              <div id="stepJudge" class="stepper-node">
-                <div class="stepper-node-dot">
-                  <span>04</span>
-                  <span class="step-icon">&bull;</span>
-                </div>
-                <div class="stepper-node-label">AI JUDGE</div>
-              </div>
-              <div id="stepSync" class="stepper-node">
-                <div class="stepper-node-dot">
-                  <span>05</span>
-                  <span class="step-icon">&bull;</span>
-                </div>
-                <div class="stepper-node-label">SHEET SYNC</div>
-              </div>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="progress-bar-container">
-              <div class="progress-bar-header">
-                <span class="mono-text" id="progressStatusText" style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">
-                  ANALYZING COMPANIES...
-                </span>
-                <span class="mono-text" id="progressFractionText" style="font-size: 12px; font-weight: 800; color: var(--accent);">
-                  0 / 0 EVALUATED
-                </span>
-              </div>
-              <div class="progress-bar-track">
-                <div class="progress-bar-fill" id="pipelineProgressBarFill"></div>
-              </div>
-            </div>
-
-            <!-- Live Company Evaluation Progress Feed -->
-            <div id="pipelineCompanyLiveFeed" class="pipeline-live-feed" style="display: none;"></div>
-
-            <!-- Metrics Summary Grid -->
-            <div id="runMetricsRow" class="metrics-row">
-              <div class="metric-cell">
-                <span class="metric-label">Discovered</span>
-                <span class="metric-val" id="metricDiscovered">0</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Processed</span>
-                <span class="metric-val" id="metricProcessed">0</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Success</span>
-                <span class="metric-val" id="metricSuccess">0</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Synced to Sheet</span>
-                <span class="metric-val" id="metricSynced">0</span>
-              </div>
-              <div class="metric-cell">
-                <span class="metric-label">Fit Decisions</span>
-                <span class="metric-val" id="metricDecisions">—</span>
-              </div>
-            </div>
-
-            <div id="syncConfirmationBanner" class="alert-box success" style="margin-top: 1.25rem; display: none;">
-              &check; DATABASE PERSISTED &nbsp;&bull;&nbsp; &check; GOOGLE SHEET SYNCED
-            </div>
+            <div class="stepper-node-label">SIGNALS</div>
           </div>
+          <div id="stepJudge" class="stepper-node">
+            <div class="stepper-node-dot">
+              <span>04</span>
+              <span class="step-icon">&bull;</span>
+            </div>
+            <div class="stepper-node-label">AI JUDGE</div>
+          </div>
+          <div id="stepSync" class="stepper-node">
+            <div class="stepper-node-dot">
+              <span>05</span>
+              <span class="step-icon">&bull;</span>
+            </div>
+            <div class="stepper-node-label">SHEET SYNC</div>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar-container">
+          <div class="progress-bar-header">
+            <span class="mono-text" id="progressStatusText" style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">
+              ANALYZING COMPANIES...
+            </span>
+            <span class="mono-text" id="progressFractionText" style="font-size: 12px; font-weight: 800; color: var(--accent);">
+              0 / 0 EVALUATED
+            </span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="pipelineProgressBarFill"></div>
+          </div>
+        </div>
+
+        <!-- Live Company Evaluation Progress Feed -->
+        <div id="pipelineCompanyLiveFeed" class="pipeline-live-feed" style="display: none;"></div>
+
+        <!-- Metrics Summary Grid -->
+        <div id="runMetricsRow" class="metrics-row">
+          <div class="metric-cell">
+            <span class="metric-label">Discovered</span>
+            <span class="metric-val" id="metricDiscovered">0</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">Processed</span>
+            <span class="metric-val" id="metricProcessed">0</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">Success</span>
+            <span class="metric-val" id="metricSuccess">0</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">Synced to Sheet</span>
+            <span class="metric-val" id="metricSynced">0</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">Fit Decisions</span>
+            <span class="metric-val" id="metricDecisions">—</span>
+          </div>
+        </div>
+
+        <div id="syncConfirmationBanner" class="alert-box success" style="margin-top: 1.25rem; display: none;">
+          &check; DATABASE PERSISTED &nbsp;&bull;&nbsp; &check; GOOGLE SHEET SYNCED
         </div>
       </div>
     </div>
@@ -1396,20 +532,17 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- 05 / LATEST RUN RESULTS SECTION -->
   <section class="section-wrap">
     <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">05 / RESULTS</div>
-        </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">LATEST RUN RESULTS</h2>
-          <p class="section-subtext">
-            Verdicts and evidence evaluated specifically during the active/most recent pipeline execution.
-          </p>
+      <div class="section-kicker">
+        <span class="label-meta">05 / RESULTS AUDIT</span>
+        <span class="label-meta label-accent">DETAILED EVIDENCE REASONING</span>
+      </div>
+      <h2 class="section-heading-large">LATEST RUN RESULTS</h2>
+      <p class="section-subtext">
+        Verdicts and evidence evaluated specifically during the active/most recent pipeline execution.
+      </p>
 
-          <div id="latestRunVerdictsList" class="verdicts-list">
-            <div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No pipeline run has been executed in this session yet. Add companies above and click "RUN PIPELINE".</div>
-          </div>
-        </div>
+      <div id="latestRunVerdictsList" class="verdicts-list">
+        <div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No pipeline run has been executed in this session yet. Select companies above and click "RUN PIPELINE".</div>
       </div>
     </div>
   </section>
@@ -1417,49 +550,46 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- 06 / SYSTEM ARCHITECTURE & SEQUENCE -->
   <section class="section-wrap">
     <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">06 / PIPELINE</div>
+      <div class="section-kicker">
+        <span class="label-meta">06 / PIPELINE SEQUENCE</span>
+        <span class="label-meta label-accent">AUTONOMOUS PIPELINE ARCHITECTURE</span>
+      </div>
+      <h2 class="section-heading-large">THE PIPELINE</h2>
+      <div class="pipeline-container">
+        <div class="pipeline-row">
+          <span class="pipeline-num">01</span>
+          <span class="pipeline-name">GOOGLE SHEETS</span>
+          <span class="pipeline-desc">Source company rows from spreadsheet</span>
         </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">THE PIPELINE</h2>
-          <div class="pipeline-container">
-            <div class="pipeline-row">
-              <span class="pipeline-num">01</span>
-              <span class="pipeline-name">GOOGLE SHEETS</span>
-              <span class="pipeline-desc">Source company rows from spreadsheet</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">02</span>
-              <span class="pipeline-name">INGESTION</span>
-              <span class="pipeline-desc">Normalize domain and persist entity</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">03</span>
-              <span class="pipeline-name">ENRICHMENT</span>
-              <span class="pipeline-desc">Multi-source independent signals &amp; metadata</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">04</span>
-              <span class="pipeline-name">BROWSER AUTOMATION</span>
-              <span class="pipeline-desc">Playwright-rendered web evidence extraction</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">05</span>
-              <span class="pipeline-name">LLM JUDGMENT</span>
-              <span class="pipeline-desc">Gemini 3.1 Flash-Lite precedence-enforced verdict</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">06</span>
-              <span class="pipeline-name">POSTGRESQL</span>
-              <span class="pipeline-desc">Atomic persistence and lease management</span>
-            </div>
-            <div class="pipeline-row">
-              <span class="pipeline-num">07</span>
-              <span class="pipeline-name">SHEET SYNC</span>
-              <span class="pipeline-desc">Structured write-back to spreadsheet row</span>
-            </div>
-          </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">02</span>
+          <span class="pipeline-name">INGESTION</span>
+          <span class="pipeline-desc">Normalize domain and persist entity</span>
+        </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">03</span>
+          <span class="pipeline-name">ENRICHMENT</span>
+          <span class="pipeline-desc">Multi-source independent signals &amp; metadata</span>
+        </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">04</span>
+          <span class="pipeline-name">BROWSER AUTOMATION</span>
+          <span class="pipeline-desc">Playwright-rendered web evidence extraction</span>
+        </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">05</span>
+          <span class="pipeline-name">LLM JUDGMENT</span>
+          <span class="pipeline-desc">Gemini 3.1 Flash-Lite precedence-enforced verdict</span>
+        </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">06</span>
+          <span class="pipeline-name">POSTGRESQL</span>
+          <span class="pipeline-desc">Atomic persistence and lease management</span>
+        </div>
+        <div class="pipeline-row">
+          <span class="pipeline-num">07</span>
+          <span class="pipeline-name">SHEET SYNC</span>
+          <span class="pipeline-desc">Structured write-back to spreadsheet row</span>
         </div>
       </div>
     </div>
@@ -1470,7 +600,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     <div style="background: var(--bg); border: 2px solid var(--text-main); max-width: 820px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
         <div>
-          <div class="label-meta label-accent">EXISTING EVALUATION RECORD</div>
+          <div class="label-meta label-accent">PERSISTED EVALUATION RECORD</div>
           <h3 id="modalCoName" style="font-size: 22px; font-weight: 900; text-transform: uppercase; margin-top: 0.25rem;">Company Name</h3>
           <a id="modalCoUrl" href="#" target="_blank" class="mono-text" style="font-size: 13px; color: var(--text-secondary); text-decoration: underline;"></a>
         </div>
@@ -1514,6 +644,58 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
     }
 
+    async function loadPersistedCompanies(showToast = false) {
+      try {
+        const res = await fetch('/companies?limit=100', { headers: getHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = data.items || [];
+
+        for (const item of items) {
+          const existingIdx = sessionCompanies.findIndex(
+            c => c.id === item.id || (item.domain && c.domain && c.domain === item.domain) || c.name.toLowerCase() === item.name.toLowerCase()
+          );
+
+          const fitVal = item.latest_verdict && item.latest_verdict.fit ? item.latest_verdict.fit.replace('FitDecision.', '').toUpperCase() : null;
+          const confVal = item.latest_verdict && item.latest_verdict.confidence !== null ? item.latest_verdict.confidence : null;
+          const isSynced = item.status === 'SYNCED';
+
+          const coObj = {
+            id: item.id,
+            name: item.name,
+            website_url: item.website_url,
+            domain: item.domain,
+            sheet_row_id: item.sheet_row_id || 'Manual Input',
+            status: item.status || 'PENDING',
+            fit: fitVal || '—',
+            confidence: confVal !== null ? `${Math.round(confVal * 100)}%` : '—',
+            is_synced: isSynced,
+            selected: true,
+          };
+
+          if (existingIdx >= 0) {
+            sessionCompanies[existingIdx] = { ...sessionCompanies[existingIdx], ...coObj };
+          } else {
+            sessionCompanies.push(coObj);
+          }
+        }
+
+        renderSessionCompanies();
+
+        if (showToast) {
+          const notice = document.getElementById('sheetSyncNotice');
+          if (notice) {
+            notice.className = 'alert-box success';
+            notice.innerText = `✓ Refreshed ${items.length} company records directly from PostgreSQL database.`;
+            notice.style.display = 'block';
+            setTimeout(() => { notice.style.display = 'none'; }, 3000);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load persisted companies:', err);
+      }
+    }
+
     function clearSessionCompanies() {
       sessionCompanies = [];
       renderSessionCompanies();
@@ -1545,6 +727,52 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       if (selectAll) selectAll.checked = allSelected;
     }
 
+    function getCompanyBadges(c) {
+      // 1. If currently actively processing in the active run
+      if (c.run_state === 'PROCESSING') {
+        return {
+          verdictBadge: `<span class="badge badge-pending"><span class="node-pulse-indicator"></span> PROCESSING...</span>`,
+          syncBadge: `<span class="badge badge-pending">—</span>`,
+        };
+      }
+      if (c.run_state === 'QUEUED') {
+        return {
+          verdictBadge: `<span class="badge badge-pending">○ QUEUED</span>`,
+          syncBadge: `<span class="badge badge-pending">—</span>`,
+        };
+      }
+
+      // 2. Persisted Verdict
+      const fit = (c.fit && c.fit !== '—' && c.fit !== 'None') ? c.fit.replace('FitDecision.', '').toUpperCase() : null;
+      const conf = (c.confidence && c.confidence !== '—') ? (typeof c.confidence === 'number' ? `${Math.round(c.confidence * 100)}%` : c.confidence) : null;
+      const confStr = conf ? ` &bull; ${conf}` : '';
+
+      let verdictBadge = '';
+      if (fit === 'YES') {
+        verdictBadge = `<span class="badge badge-yes">&check; YES${confStr}</span>`;
+      } else if (fit === 'NO') {
+        verdictBadge = `<span class="badge badge-no">&check; NO${confStr}</span>`;
+      } else if (fit === 'UNCERTAIN') {
+        verdictBadge = `<span class="badge badge-uncertain">! UNCERTAIN${confStr}</span>`;
+      } else if (c.status === 'FAILED') {
+        verdictBadge = `<span class="badge badge-failed">! FAILED</span>`;
+      } else {
+        verdictBadge = `<span class="badge badge-pending">○ NOT PROCESSED</span>`;
+      }
+
+      // 3. Google Sheets Sync State
+      let syncBadge = '';
+      if (c.is_synced || c.status === 'SYNCED') {
+        syncBadge = `<span class="badge badge-synced">SYNCED TO SHEET</span>`;
+      } else if (fit) {
+        syncBadge = `<span class="badge badge-pending" style="color:var(--text-muted);">NOT SYNCED</span>`;
+      } else {
+        syncBadge = `<span class="badge badge-pending">—</span>`;
+      }
+
+      return { verdictBadge, syncBadge };
+    }
+
     function renderSessionCompanies() {
       const tbody = document.getElementById('companiesTableBody');
       const countBadge = document.getElementById('workingListCountBadge');
@@ -1553,34 +781,37 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
 
       if (sessionCompanies.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or sync from Google Sheets above.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or click "SYNC FROM GOOGLE SHEETS" above.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = sessionCompanies.map(c => {
-        const rawFit = c.fit || '—';
-        const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : '—').toUpperCase();
-        let fitBadge = `<span class="badge badge-pending">—</span>`;
-        if (fit === 'YES') fitBadge = `<span class="badge badge-yes">YES</span>`;
-        else if (fit === 'NO') fitBadge = `<span class="badge badge-no">NO</span>`;
-        else if (fit === 'UNCERTAIN') fitBadge = `<span class="badge badge-uncertain">UNCERTAIN</span>`;
-
-        const conf = (c.confidence !== null && c.confidence !== undefined && c.confidence !== '—') ? (typeof c.confidence === 'number' ? `${Math.round(c.confidence * 100)}%` : c.confidence) : '—';
-        const statusClass = `badge-${(c.status || 'pending').toLowerCase()}`;
+        const { verdictBadge, syncBadge } = getCompanyBadges(c);
         const sheetRow = c.sheet_row_id || 'Manual Input';
         const isChecked = c.selected !== false;
+        const hasVerdict = (c.fit && c.fit !== '—' && c.fit !== 'None');
 
         return `
           <tr>
             <td style="text-align: center;">
               <input type="checkbox" onchange="toggleSelectCompany('${c.id}')" ${isChecked ? 'checked' : ''} />
             </td>
-            <td><strong>${escapeHtml(c.name)}</strong></td>
-            <td><a href="${escapeHtml(c.website_url)}" target="_blank" class="mono-text" style="font-size:13px; color:var(--text-secondary); text-decoration: underline;">${escapeHtml(c.website_url || '—')}</a></td>
+            <td>
+              <div style="font-weight: 800; font-size: 14.5px; text-transform: uppercase;">${escapeHtml(c.name)}</div>
+              <a href="${escapeHtml(c.website_url)}" target="_blank" class="mono-text" style="font-size:12px; color:var(--text-muted); text-decoration: underline; display: inline-block; margin-top: 2px;">
+                ${escapeHtml(c.domain || c.website_url || '—')}
+              </a>
+            </td>
             <td class="mono-text" style="font-size:12px;">${escapeHtml(sheetRow)}</td>
-            <td><span class="badge ${statusClass}">${escapeHtml(c.status || 'PENDING')}</span></td>
-            <td>${fitBadge}</td>
-            <td class="mono-text" style="font-weight:700;">${conf}</td>
+            <td>${verdictBadge}</td>
+            <td>${syncBadge}</td>
+            <td style="text-align: right;">
+              ${hasVerdict ? `
+                <button type="button" class="key-btn" onclick="viewExistingCompanyResult('${c.id}')" style="font-size: 10.5px; padding: 0.35rem 0.65rem;">👁 VIEW</button>
+              ` : `
+                <span class="mono-text" style="font-size:11px; color:var(--text-muted);">—</span>
+              `}
+            </td>
           </tr>
         `;
       }).join('');
@@ -1589,7 +820,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     function renderLatestRunResults(companyResults, runMetrics) {
       const container = document.getElementById('latestRunVerdictsList');
       if (!companyResults || companyResults.length === 0 || (runMetrics && runMetrics.processed_count === 0)) {
-        container.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No companies were processed in this run (0 discovered / all companies already evaluated).</div>`;
+        container.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No companies were evaluated in this run (0 discovered / all companies already evaluated).</div>`;
         return;
       }
 
@@ -1706,6 +937,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               status: item.status || 'PENDING',
               fit: item.fit || '—',
               confidence: item.confidence || '—',
+              is_synced: item.is_synced || item.status === 'SYNCED',
               selected: true,
             };
             if (existingIdx >= 0) {
@@ -1716,7 +948,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           }
           renderSessionCompanies();
 
-          btn.innerHTML = '✓ SYNCED';
+          btn.innerHTML = '&check; SYNCED';
           notice.className = 'alert-box success';
           notice.innerText = `✓ Synced from Google Sheets: ${data.rows_read} rows read, ${data.companies_created} created, ${data.companies_updated} updated. Staged ${sessionCompanies.length} companies in working list.`;
           notice.style.display = 'block';
@@ -1753,7 +985,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       const modalCoUrl = document.getElementById('modalCoUrl');
 
       modal.style.display = 'flex';
-      modalContent.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 2rem 0; text-align: center;">Loading existing company evaluation...</div>`;
+      modalContent.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 2rem 0; text-align: center;">Loading persisted company evaluation...</div>`;
 
       try {
         const res = await fetch(`/companies/${companyId}`, { headers: getHeaders() });
@@ -1836,13 +1068,11 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           fit: '—',
           confidence: '—',
           sheet_row_id: '—',
+          is_synced: false,
           selected: true,
         };
         sessionCompanies.push(co);
       } else {
-        co.status = 'PENDING';
-        co.fit = '—';
-        co.confidence = '—';
         co.selected = true;
       }
       renderSessionCompanies();
@@ -1908,6 +1138,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             fit: '—',
             confidence: '—',
             sheet_row_id: data.sheet_row_id || 'Manual Input',
+            is_synced: false,
             selected: true,
           });
           renderSessionCompanies();
@@ -1924,14 +1155,18 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           if (dupId) {
             const alreadyThere = sessionCompanies.some(c => c.id === dupId);
             if (!alreadyThere) {
+              const dFit = (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.fit) || '—';
+              const dConf = (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.confidence !== null) ? `${Math.round(data.detail.latest_verdict.confidence * 100)}%` : '—';
+              const dStatus = (errDetails.status || (data.detail && data.detail.status) || 'PENDING');
               sessionCompanies.push({
                 id: dupId,
                 name: dupName,
                 website_url: dupUrl,
-                status: (errDetails.status || (data.detail && data.detail.status) || 'PENDING'),
-                fit: (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.fit) || '—',
-                confidence: (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.confidence !== null) ? `${Math.round(data.detail.latest_verdict.confidence * 100)}%` : '—',
+                status: dStatus,
+                fit: dFit,
+                confidence: dConf,
                 sheet_row_id: 'Manual Input',
+                is_synced: dStatus === 'SYNCED',
                 selected: true,
               });
               renderSessionCompanies();
@@ -2003,17 +1238,36 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       setStepperNodeState('stepJudge', '');
       setStepperNodeState('stepSync', '');
 
+      // Mark running companies in session
+      for (const co of sessionCompanies) {
+        if (companyIds.includes(co.id)) {
+          if (forceReprocess || !co.fit || co.fit === '—') {
+            co.run_state = 'QUEUED';
+          }
+        }
+      }
+      renderSessionCompanies();
+
       // Render initial live feed
       const feed = document.getElementById('pipelineCompanyLiveFeed');
       const targetCos = sessionCompanies.filter(c => companyIds.includes(c.id));
       if (targetCos.length > 0) {
         feed.style.display = 'flex';
-        feed.innerHTML = targetCos.map(c => `
-          <div class="feed-item" id="feedItem_${c.id}">
-            <span><strong>${escapeHtml(c.name)}</strong> <span class="mono-text" style="color:var(--text-muted); font-size:11px;">(${escapeHtml(c.domain || c.website_url)})</span></span>
-            <span class="badge badge-pending" id="feedBadge_${c.id}">QUEUED</span>
-          </div>
-        `).join('');
+        feed.innerHTML = targetCos.map(c => {
+          const isPendingEval = forceReprocess || !c.fit || c.fit === '—';
+          let initialBadge = `<span class="badge badge-pending" id="feedBadge_${c.id}">○ QUEUED</span>`;
+          if (!isPendingEval) {
+            const fit = (c.fit || '').toUpperCase();
+            const fitClass = fit === 'YES' ? 'badge-yes' : (fit === 'NO' ? 'badge-no' : 'badge-uncertain');
+            initialBadge = `<span class="badge ${fitClass}" id="feedBadge_${c.id}">&check; ${fit} (${c.confidence || '—'}) &bull; PERSISTED</span>`;
+          }
+          return `
+            <div class="feed-item" id="feedItem_${c.id}">
+              <span><strong>${escapeHtml(c.name)}</strong> <span class="mono-text" style="color:var(--text-muted); font-size:11px;">(${escapeHtml(c.domain || c.website_url)})</span></span>
+              ${initialBadge}
+            </div>
+          `;
+        }).join('');
       }
 
       try {
@@ -2065,7 +1319,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         document.getElementById('syncConfirmationBanner').style.display = 'none';
         document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
         document.getElementById('runStatusBadge').innerText = 'NO COMPANIES';
-        document.getElementById('runIdDisplay').innerText = 'No companies added to the current working list.';
+        document.getElementById('runIdDisplay').innerText = 'No companies in the working list.';
         document.getElementById('metricDiscovered').innerText = 0;
         document.getElementById('metricProcessed').innerText = 0;
         document.getElementById('metricSuccess').innerText = 0;
@@ -2119,22 +1373,33 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           document.getElementById('progressStatusText').innerText = `ANALYZING (${processed} OF ${totalExpected} EVALUATED)...`;
           document.getElementById('progressFractionText').innerText = `${processed} / ${totalExpected} EVALUATED (${percent}%)`;
 
-          // Update feed item badges
+          // Update feed item badges & session companies
           const results = data.company_results || [];
           for (const r of results) {
             const badge = document.getElementById(`feedBadge_${r.company_id}`);
             if (badge) {
               const fit = (r.fit || 'UNCERTAIN').replace('FitDecision.', '');
+              const conf = r.confidence !== null ? `${Math.round(r.confidence * 100)}%` : '—';
+              const syncTxt = r.is_synced ? ' &bull; SYNCED TO SHEET' : '';
               if (fit === 'YES') {
                 badge.className = 'badge badge-yes';
-                badge.innerText = '✓ FIT: YES';
+                badge.innerHTML = `&check; FIT: YES (${conf})${syncTxt}`;
               } else if (fit === 'NO') {
                 badge.className = 'badge badge-no';
-                badge.innerText = '✓ FIT: NO';
+                badge.innerHTML = `&check; FIT: NO (${conf})${syncTxt}`;
               } else {
                 badge.className = 'badge badge-uncertain';
-                badge.innerText = '✓ FIT: UNCERTAIN';
+                badge.innerHTML = `! FIT: UNCERTAIN (${conf})${syncTxt}`;
               }
+            }
+
+            const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
+            if (co) {
+              co.run_state = null;
+              co.status = (r.status || '').replace('CompanyStatus.', '');
+              co.fit = (r.fit || '—').replace('FitDecision.', '');
+              co.confidence = (r.confidence !== null && r.confidence !== undefined) ? `${Math.round(r.confidence * 100)}%` : '—';
+              co.is_synced = r.is_synced;
             }
           }
 
@@ -2177,23 +1442,19 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             }
 
             const btn = document.getElementById('runPipelineBtn');
-            btn.innerHTML = '✓ PIPELINE COMPLETE';
+            btn.innerHTML = '&check; PIPELINE COMPLETE';
             setTimeout(() => {
               btn.disabled = false;
               btn.innerText = 'RUN PIPELINE';
             }, 3000);
 
-            // Update session working list with latest results
-            for (const r of results) {
-              const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
-              if (co) {
-                co.status = (r.status || '').replace('CompanyStatus.', '');
-                co.fit = (r.fit || '—').replace('FitDecision.', '');
-                co.confidence = (r.confidence !== null && r.confidence !== undefined) ? `${Math.round(r.confidence * 100)}%` : '—';
-                co.is_synced = r.is_synced;
-              }
+            // Clean any remaining temporary run_state
+            for (const co of sessionCompanies) {
+              co.run_state = null;
             }
-            renderSessionCompanies();
+
+            // Authoritative reload from database
+            await loadPersistedCompanies(false);
             renderLatestRunResults(results, metrics);
           } else if (status === 'FAILED') {
             clearInterval(activePollingInterval);
@@ -2205,11 +1466,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             btn.disabled = false;
             btn.innerText = 'RUN PIPELINE';
 
-            for (const r of results) {
-              const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
-              if (co) {
-                co.status = r.status;
-              }
+            for (const co of sessionCompanies) {
+              co.run_state = null;
             }
             renderSessionCompanies();
             renderLatestRunResults(results, metrics);
@@ -2237,7 +1495,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', () => {
       checkHealth();
-      renderSessionCompanies();
+      loadPersistedCompanies(false);
     });
   </script>
 </body>

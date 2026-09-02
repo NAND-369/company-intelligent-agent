@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import Settings, get_settings
-from app.database.enums import SyncDirection, SyncStatus
+from app.database.enums import CompanyStatus, SyncDirection, SyncStatus
 from app.database.repositories import CompanyRepository, SyncLogRepository, VerdictRepository
 from app.integrations.google_sheets.client import (
     GoogleSheetsClient,
@@ -138,6 +138,7 @@ class CompanyIngestionService:
                     "status": company.status.value if hasattr(company.status, "value") else str(company.status),
                     "fit": fit_str,
                     "confidence": conf_str,
+                    "is_synced": company.status == CompanyStatus.SYNCED,
                 })
 
                 if created:
