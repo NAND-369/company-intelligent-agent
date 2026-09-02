@@ -242,4 +242,7 @@ async def sync_google_sheet(
         "companies_updated": result.companies_updated,
         "rows_skipped": result.rows_skipped,
         "errors": result.errors,
+        "created_company_ids": result.created_company_ids,
+        "updated_company_ids": result.updated_company_ids,
+        "imported_companies": result.imported_companies,
     }

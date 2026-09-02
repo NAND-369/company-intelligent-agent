@@ -29,6 +29,7 @@ from app.integrations.google_sheets.client import (
     GoogleSheetsClientProtocol,
     SpreadsheetNotFoundError,
 )
+from app.integrations.google_sheets.service import CompanyIngestionService
 from app.pipeline.orchestrator import PipelineOrchestrator
 from app.pipeline.schemas import PipelineRunRequest
 from app.sync.column_mapper import SheetColumnMapper
@@ -567,3 +568,92 @@ async def test_sync_failure_does_not_corrupt_or_lose_verdict(db_session: AsyncSe
     assert latest_verdict.id == verdict.id
     assert latest_verdict.fit == FitDecision.YES
     assert latest_verdict.confidence == 0.98
+
+
+@pytest.mark.asyncio
+async def test_sheet_sync_and_manual_input_converge_no_duplicates(db_session: AsyncSession) -> None:
+    """Verify that manual entry and sheet ingestion for the same domain converge to a single DB entity."""
+    # 1. Manual addition
+    manual_co = await CompanyRepository.create(
+        session=db_session,
+        name="Anthropic",
+        website_url="https://www.anthropic.com",
+        domain="anthropic.com",
+        sheet_row_id=None,
+        status=CompanyStatus.PENDING,
+    )
+    await db_session.commit()
+
+    # 2. Ingest from Sheet (row 2)
+    mock_client = MockGoogleSheetsSyncClient()
+    mock_client.get_rows_with_indices = lambda spreadsheet_id, worksheet_name: [(2, {"Company Name": "Anthropic PBC", "Website": "http://anthropic.com/"})]
+
+    ingestion_service = CompanyIngestionService(session=db_session, client=mock_client)
+    res = await ingestion_service.ingest_companies(spreadsheet_id="test_sheet")
+
+    assert res.companies_created == 0
+    assert res.companies_updated == 1
+    assert len(res.imported_companies) == 1
+    assert res.imported_companies[0]["id"] == str(manual_co.id)
+    assert res.imported_companies[0]["sheet_row_id"] == "row_2"
+
+    # Verify single entity in database
+    company = await CompanyRepository.get_by_id(db_session, manual_co.id)
+    assert company.sheet_row_id == "row_2"
+    assert company.domain == "anthropic.com"
+
+
+@pytest.mark.asyncio
+async def test_domain_normalization_and_upsert_identity(db_session: AsyncSession) -> None:
+    """Verify that varied URL formats match the same canonical company entity."""
+    co1, created1 = await CompanyRepository.upsert_by_sheet_row_id(
+        session=db_session,
+        name="Datadog",
+        website_url="https://www.datadoghq.com/",
+        sheet_row_id="row_4",
+        domain="datadoghq.com",
+    )
+    await db_session.commit()
+    assert created1 is True
+
+    # Upsert with different URL variation and name case
+    co2, created2 = await CompanyRepository.upsert_by_sheet_row_id(
+        session=db_session,
+        name="Datadog HQ",
+        website_url="http://datadoghq.com",
+        sheet_row_id="row_4",
+        domain="datadoghq.com",
+    )
+    await db_session.commit()
+    assert created2 is False
+    assert co1.id == co2.id
+    assert co2.name == "Datadog HQ"
+
+
+@pytest.mark.asyncio
+async def test_changed_sheet_row_domain_resets_status_to_pending(db_session: AsyncSession) -> None:
+    """Verify that changing a sheet row's domain marks it as PENDING for re-evaluation."""
+    company, _ = await CompanyRepository.upsert_by_sheet_row_id(
+        session=db_session,
+        name="Old Tech",
+        website_url="https://oldtech.io",
+        sheet_row_id="row_6",
+        domain="oldtech.io",
+    )
+    company.status = CompanyStatus.SYNCED
+    await db_session.commit()
+
+    # Now Sheet row 6 changes to a completely new domain
+    updated_company, created = await CompanyRepository.upsert_by_sheet_row_id(
+        session=db_session,
+        name="New Tech Inc",
+        website_url="https://newtech.ai",
+        sheet_row_id="row_6",
+        domain="newtech.ai",
+    )
+    await db_session.commit()
+
+    assert created is False
+    assert updated_company.id == company.id
+    assert updated_company.domain == "newtech.ai"
+    assert updated_company.status == CompanyStatus.PENDING

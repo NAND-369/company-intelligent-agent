@@ -58,7 +58,26 @@ class CompanyRepository:
         """Find a company by its normalized website URL."""
         stmt = select(Company).where(Company.website_url == website_url)
         result = await session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_by_domain(session: AsyncSession, domain: str) -> Optional[Company]:
+        """Find a company by its normalized domain."""
+        if not domain:
+            return None
+        stmt = select(Company).where(Company.domain == domain.strip().lower())
+        result = await session.execute(stmt)
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_by_name(session: AsyncSession, name: str) -> Optional[Company]:
+        """Find a company by case-insensitive name matching."""
+        if not name:
+            return None
+        from sqlalchemy import func
+        stmt = select(Company).where(func.lower(Company.name) == name.strip().lower())
+        result = await session.execute(stmt)
+        return result.scalars().first()
 
     @staticmethod
     async def create(
@@ -90,15 +109,38 @@ class CompanyRepository:
         domain: Optional[str] = None,
     ) -> tuple[Company, bool]:
         """
-        Idempotently find or create a company by sheet_row_id.
+        Idempotently find or create a company by sheet_row_id, domain, website_url, or name.
         Returns a tuple of (Company, created: bool).
         """
-        existing = await CompanyRepository.get_by_sheet_row_id(session, sheet_row_id)
+        existing: Optional[Company] = None
+
+        # 1. Primary lookup by sheet_row_id
+        if sheet_row_id:
+            existing = await CompanyRepository.get_by_sheet_row_id(session, sheet_row_id)
+
+        # 2. Secondary lookup by normalized domain
+        if not existing and domain:
+            existing = await CompanyRepository.get_by_domain(session, domain)
+
+        # 3. Tertiary lookup by website URL
+        if not existing and website_url:
+            existing = await CompanyRepository.get_by_website(session, website_url)
+
+        # 4. Fallback lookup by company name
+        if not existing and name:
+            existing = await CompanyRepository.get_by_name(session, name)
+
         if existing:
+            # If domain changed materially from previous record, mark for re-evaluation
+            if domain and existing.domain and existing.domain.lower() != domain.lower():
+                existing.status = CompanyStatus.PENDING
+                existing.domain = domain
+            elif not existing.domain and domain:
+                existing.domain = domain
+
             existing.name = name
             existing.website_url = website_url
-            if domain:
-                existing.domain = domain
+            existing.sheet_row_id = sheet_row_id
             await session.flush()
             return existing, False
 

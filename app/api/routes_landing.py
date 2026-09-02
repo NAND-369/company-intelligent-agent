@@ -371,6 +371,48 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       gap: 1.25rem;
     }
 
+    /* Dual Input Source Grid */
+    .source-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .source-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .source-card {
+      border: 1px solid var(--border);
+      background-color: #ffffff;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .source-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .source-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+
     /* Notification Box */
     .alert-box {
       padding: 1rem 1.25rem;
@@ -848,87 +890,105 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- 01 / GOOGLE SHEET SOURCE SECTION -->
+  <!-- 01 / INPUT SOURCES SECTION -->
   <section class="section-wrap">
     <div class="container">
       <div class="grid-12">
         <div class="col-span-3">
-          <div class="label-meta">01 / SOURCE</div>
+          <div class="label-meta">01 / INPUT SOURCES</div>
         </div>
         <div class="col-span-9">
-          <h2 class="section-heading-large">GOOGLE SHEET</h2>
+          <h2 class="section-heading-large">ADD COMPANIES</h2>
           <p class="section-subtext">
-            Source spreadsheet configured as the primary company queue and bidirectional sync target.
+            Ingest companies from either source. Both input flows converge into the same active working list and evaluate through the single company intelligence pipeline.
           </p>
 
-          <div style="border: 1px solid var(--border); background: #ffffff; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 1rem;">
-            <div>
-              <div class="label-meta" style="margin-bottom: 0.25rem;">TARGET WORKSHEET</div>
-              <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.01em;">Companies &bull; <span style="color: var(--green); font-size: 14px; font-family: var(--font-mono); font-weight: 700;">● CONNECTED</span></div>
+          <div class="source-grid">
+            <!-- SOURCE A: MANUAL URL INPUT -->
+            <div class="source-card">
+              <div>
+                <div class="source-card-header">
+                  <span class="label-meta">SOURCE A &bull; MANUAL INPUT</span>
+                  <span class="source-badge">URL / FORM</span>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">ADD COMPANY MANUALLY</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                  Enter a company name and target website URL to stage directly into the working list.
+                </p>
+                <form id="addCompanyForm" onsubmit="handleAddCompany(event)">
+                  <div class="form-group">
+                    <label class="form-label" for="compName">Company Name</label>
+                    <input class="form-input" type="text" id="compName" placeholder="e.g. Anthropic" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="compUrl">Website URL</label>
+                    <input class="form-input" type="url" id="compUrl" placeholder="https://www.anthropic.com" required />
+                  </div>
+                  <button type="submit" id="addCompBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.25rem;">ADD COMPANY</button>
+                </form>
+              </div>
+              <div id="addCompanyNotice" class="alert-box"></div>
             </div>
-            <button id="syncSheetBtn" class="btn btn-primary" onclick="syncFromGoogleSheet()">SYNC SHEET</button>
+
+            <!-- SOURCE B: GOOGLE SHEETS -->
+            <div class="source-card">
+              <div>
+                <div class="source-card-header">
+                  <span class="label-meta">SOURCE B &bull; GOOGLE SHEETS</span>
+                  <span class="source-badge" style="background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE;">CONNECTED: ✓</span>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 0.5rem; text-transform: uppercase;">SYNC FROM GOOGLE SHEETS</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                  Pull new or updated company rows from the configured worksheet into the working list.
+                </p>
+                <div style="background: var(--bg); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1.25rem;">
+                  <div class="label-meta" style="margin-bottom: 0.25rem;">TARGET WORKSHEET</div>
+                  <div style="font-family: var(--font-mono); font-size: 14px; font-weight: 700;">
+                    Companies &bull; <span style="color: var(--green);">● ONLINE</span>
+                  </div>
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 1.25rem;">
+                  Preserves existing row associations and prepares queued companies for pipeline judgment.
+                </p>
+                <button id="syncSheetBtn" class="btn btn-secondary" onclick="syncFromGoogleSheet()" style="width: 100%;">SYNC FROM GOOGLE SHEETS</button>
+              </div>
+              <div id="sheetSyncNotice" class="alert-box"></div>
+            </div>
           </div>
-          <div id="sheetSyncNotice" class="alert-box"></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 02 / ADD COMPANY SECTION -->
+  <!-- 02 / CURRENT WORKING LIST & EXECUTION SECTION -->
   <section class="section-wrap">
     <div class="container">
       <div class="grid-12">
         <div class="col-span-3">
-          <div class="label-meta">02 / INPUT</div>
-        </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">ADD COMPANY</h2>
-          <p class="section-subtext">
-            Manually ingest a new company into PostgreSQL for pipeline intelligence processing.
-          </p>
-
-          <form id="addCompanyForm" onsubmit="handleAddCompany(event)">
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label class="form-label" for="compName">Company Name</label>
-                <input class="form-input" type="text" id="compName" placeholder="e.g. Stripe" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="compUrl">Website URL</label>
-                <input class="form-input" type="url" id="compUrl" placeholder="https://stripe.com" required />
-              </div>
-            </div>
-            <button type="submit" id="addCompBtn" class="btn btn-primary" style="margin-top: 0.5rem;">ADD COMPANY</button>
-          </form>
-          <div id="addCompanyNotice" class="alert-box"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 03 / COMPANIES LIST SECTION -->
-  <section class="section-wrap">
-    <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">03 / STAGING</div>
+          <div class="label-meta">02 / WORKING LIST</div>
         </div>
         <div class="col-span-9">
           <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
-            <h2 class="section-heading-large" style="margin-bottom: 0;">COMPANIES</h2>
-            <button class="key-btn" onclick="clearSessionCompanies()">CLEAR WORKING LIST</button>
+            <div>
+              <h2 class="section-heading-large" style="margin-bottom: 0.25rem;">CURRENT WORKING LIST</h2>
+              <div class="mono-text" style="font-size: 13px; color: var(--text-muted);">
+                <span id="workingListCountBadge" class="badge badge-synced" style="font-size: 12px; margin-right: 0.5rem;">0 COMPANIES</span>
+                Staged for evaluation through the single intelligence pipeline
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="key-btn" onclick="clearSessionCompanies()">CLEAR LIST</button>
+            </div>
           </div>
-          <p class="section-subtext" style="margin-top: 0.75rem;">
-            Companies added during the current dashboard session awaiting or evaluated by the pipeline.
-          </p>
 
           <div class="table-container">
             <table>
               <thead>
                 <tr>
+                  <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(event)" checked /></th>
                   <th>Company</th>
                   <th>Website</th>
-                  <th>Row ID</th>
+                  <th>Source / Row ID</th>
                   <th>Status</th>
                   <th>Fit</th>
                   <th>Confidence</th>
@@ -936,41 +996,25 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               </thead>
               <tbody id="companiesTableBody">
                 <tr>
-                  <td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet.</td>
+                  <td colspan="7" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or sync from Google Sheets above.</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- 04 / PIPELINE EXECUTION & LIVE STATUS -->
-  <section class="section-wrap">
-    <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">04 / EXECUTION</div>
-        </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">RUN PIPELINE</h2>
-          <p class="section-subtext">
-            Trigger end-to-end intelligence execution: Process current session companies, collect independent HTTP and browser signals, judge with Gemini 3.1 Flash-Lite, and write results back to Google Sheets.
-          </p>
-
-          <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-            <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE</button>
+          <!-- Pipeline Execution Trigger Controls -->
+          <div style="margin-top: 1.5rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; background: #ffffff; border: 1px solid var(--border); padding: 1.5rem;">
+            <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()" style="padding: 1rem 2.5rem; font-size: 13px;">RUN PIPELINE</button>
             <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
               <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already evaluated companies
             </label>
           </div>
 
-          <!-- Live Run Monitor -->
+          <!-- Live Run Monitor Box -->
           <div id="pipelineMonitor" class="monitor-box">
             <div class="monitor-header">
               <div>
-                <div class="monitor-title">PIPELINE RUN</div>
+                <div class="monitor-title">PIPELINE RUN EXECUTION</div>
                 <div class="mono-text" id="runIdDisplay" style="font-size: 12px; color: var(--text-muted); margin-top: 0.25rem;"></div>
               </div>
               <div id="runStatusBadge" class="monitor-status status-running">RUNNING</div>
@@ -1153,19 +1197,48 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       sessionCompanies = [];
       renderSessionCompanies();
       const notice = document.getElementById('addCompanyNotice');
-      notice.className = 'alert-box';
-      notice.style.display = 'none';
+      if (notice) {
+        notice.className = 'alert-box';
+        notice.style.display = 'none';
+      }
+      const sheetNotice = document.getElementById('sheetSyncNotice');
+      if (sheetNotice) {
+        sheetNotice.className = 'alert-box';
+        sheetNotice.style.display = 'none';
+      }
+    }
+
+    function toggleSelectAll(e) {
+      const isChecked = e.target.checked;
+      sessionCompanies.forEach(c => { c.selected = isChecked; });
+      renderSessionCompanies();
+    }
+
+    function toggleSelectCompany(id) {
+      const co = sessionCompanies.find(c => c.id === id);
+      if (co) {
+        co.selected = !co.selected;
+      }
+      const allSelected = sessionCompanies.length > 0 && sessionCompanies.every(c => c.selected !== false);
+      const selectAll = document.getElementById('selectAllCheckbox');
+      if (selectAll) selectAll.checked = allSelected;
     }
 
     function renderSessionCompanies() {
       const tbody = document.getElementById('companiesTableBody');
+      const countBadge = document.getElementById('workingListCountBadge');
+      if (countBadge) {
+        countBadge.innerText = `${sessionCompanies.length} COMPANIES`;
+      }
+
       if (sessionCompanies.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet. Add a company manually or sync from Google Sheets above.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = sessionCompanies.map(c => {
-        const fit = c.fit || '—';
+        const rawFit = c.fit || '—';
+        const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : '—').toUpperCase();
         let fitBadge = `<span class="badge badge-pending">—</span>`;
         if (fit === 'YES') fitBadge = `<span class="badge badge-yes">YES</span>`;
         else if (fit === 'NO') fitBadge = `<span class="badge badge-no">NO</span>`;
@@ -1173,12 +1246,16 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
         const conf = (c.confidence !== null && c.confidence !== undefined && c.confidence !== '—') ? (typeof c.confidence === 'number' ? `${Math.round(c.confidence * 100)}%` : c.confidence) : '—';
         const statusClass = `badge-${(c.status || 'pending').toLowerCase()}`;
-        const sheetRow = c.sheet_row_id || '—';
+        const sheetRow = c.sheet_row_id || 'Manual Input';
+        const isChecked = c.selected !== false;
 
         return `
           <tr>
+            <td style="text-align: center;">
+              <input type="checkbox" onchange="toggleSelectCompany('${c.id}')" ${isChecked ? 'checked' : ''} />
+            </td>
             <td><strong>${escapeHtml(c.name)}</strong></td>
-            <td class="mono-text" style="font-size:13px; color:var(--text-secondary);">${escapeHtml(c.website_url || '—')}</td>
+            <td><a href="${escapeHtml(c.website_url)}" target="_blank" class="mono-text" style="font-size:13px; color:var(--text-secondary); text-decoration: underline;">${escapeHtml(c.website_url || '—')}</a></td>
             <td class="mono-text" style="font-size:12px;">${escapeHtml(sheetRow)}</td>
             <td><span class="badge ${statusClass}">${escapeHtml(c.status || 'PENDING')}</span></td>
             <td>${fitBadge}</td>
@@ -1294,8 +1371,34 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
         const data = await res.json();
         if (res.ok && data.status === 'success') {
+          const imported = data.imported_companies || [];
+          let addedCount = 0;
+          for (const item of imported) {
+            const existingIdx = sessionCompanies.findIndex(
+              c => c.id === item.id || (item.domain && c.domain && c.domain === item.domain) || c.name.toLowerCase() === item.name.toLowerCase()
+            );
+            const coObj = {
+              id: item.id,
+              name: item.name,
+              website_url: item.website_url,
+              domain: item.domain,
+              sheet_row_id: item.sheet_row_id || '—',
+              status: item.status || 'PENDING',
+              fit: item.fit || '—',
+              confidence: item.confidence || '—',
+              selected: true,
+            };
+            if (existingIdx >= 0) {
+              sessionCompanies[existingIdx] = { ...sessionCompanies[existingIdx], ...coObj };
+            } else {
+              sessionCompanies.push(coObj);
+              addedCount++;
+            }
+          }
+          renderSessionCompanies();
+
           notice.className = 'alert-box success';
-          notice.innerText = `✓ Sheet sync complete: ${data.rows_read} rows read, ${data.companies_created} created, ${data.companies_updated} updated, ${data.rows_skipped} skipped.`;
+          notice.innerText = `✓ Synced from Google Sheets: ${data.rows_read} rows read, ${data.companies_created} created, ${data.companies_updated} updated. Staged ${sessionCompanies.length} companies in working list.`;
           notice.style.display = 'block';
         } else {
           notice.className = 'alert-box error';
@@ -1308,7 +1411,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         notice.style.display = 'block';
       } finally {
         btn.disabled = false;
-        btn.innerText = 'SYNC SHEET';
+        btn.innerText = 'SYNC FROM GOOGLE SHEETS';
       }
     }
 
@@ -1407,12 +1510,15 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           status: 'PENDING',
           fit: '—',
           confidence: '—',
+          sheet_row_id: '—',
+          selected: true,
         };
         sessionCompanies.push(co);
       } else {
         co.status = 'PENDING';
         co.fit = '—';
         co.confidence = '—';
+        co.selected = true;
       }
       renderSessionCompanies();
 
@@ -1440,7 +1546,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       if (existingInSession) {
         notice.className = 'alert-box error';
         notice.innerHTML = `
-          <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(existingInSession.name)} already exists.</div>
+          <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(existingInSession.name)} is already in the working list.</div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
             <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${existingInSession.id}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
             <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${existingInSession.id}', '${escapeHtml(existingInSession.name)}', '${escapeHtml(existingInSession.website_url)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
@@ -1475,14 +1581,16 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             id: data.id,
             name: data.name,
             website_url: data.website_url,
+            domain: data.domain,
             status: data.status || 'PENDING',
             fit: '—',
             confidence: '—',
-            sheet_row_id: data.sheet_row_id || '—',
+            sheet_row_id: data.sheet_row_id || 'Manual Input',
+            selected: true,
           });
           renderSessionCompanies();
           notice.className = 'alert-box success';
-          notice.innerText = `✓ ${data.name} added successfully`;
+          notice.innerText = `✓ ${data.name} added to working list`;
           notice.style.display = 'block';
           document.getElementById('addCompanyForm').reset();
         } else if (res.status === 409) {
@@ -1491,9 +1599,27 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           const dupName = errDetails.name || name;
           const dupUrl = errDetails.website_url || website_url;
 
+          // Also add the existing record to the session working list if not already there!
+          if (dupId) {
+            const alreadyThere = sessionCompanies.some(c => c.id === dupId);
+            if (!alreadyThere) {
+              sessionCompanies.push({
+                id: dupId,
+                name: dupName,
+                website_url: dupUrl,
+                status: (errDetails.status || (data.detail && data.detail.status) || 'PENDING'),
+                fit: (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.fit) || '—',
+                confidence: (data.detail && data.detail.latest_verdict && data.detail.latest_verdict.confidence !== null) ? `${Math.round(data.detail.latest_verdict.confidence * 100)}%` : '—',
+                sheet_row_id: 'Manual Input',
+                selected: true,
+              });
+              renderSessionCompanies();
+            }
+          }
+
           notice.className = 'alert-box error';
           notice.innerHTML = `
-            <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(dupName)} already exists.</div>
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 0.5rem;">${escapeHtml(dupName)} already exists in database. Staged in working list.</div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
               <button type="button" class="btn key-btn" onclick="viewExistingCompanyResult('${dupId}')" style="background: #ffffff; color: var(--text-main); border: 1px solid var(--border); font-size: 11px; padding: 0.4rem 0.8rem;">👁 View Existing Result</button>
               <button type="button" class="btn key-btn" onclick="recomputeExistingCompany('${dupId}', '${escapeHtml(dupName)}', '${escapeHtml(dupUrl)}')" style="background: var(--accent); color: #ffffff; border: 1px solid var(--accent); font-size: 11px; padding: 0.4rem 0.8rem;">🔄 Recompute</button>
@@ -1574,6 +1700,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
     async function triggerPipelineRun() {
       const forceReprocess = document.getElementById('forceReprocessCheckbox').checked;
+      const targetCompanies = sessionCompanies.filter(c => c.selected !== false);
 
       if (sessionCompanies.length === 0) {
         const monitor = document.getElementById('pipelineMonitor');
@@ -1591,7 +1718,12 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         return;
       }
 
-      await triggerPipelineRunForCompanies(sessionCompanies.map(c => c.id), forceReprocess);
+      if (targetCompanies.length === 0) {
+        alert('No companies selected in the working list. Check the box next to the companies you wish to evaluate.');
+        return;
+      }
+
+      await triggerPipelineRunForCompanies(targetCompanies.map(c => c.id), forceReprocess);
     }
 
     function setStageState(elementId, state) {

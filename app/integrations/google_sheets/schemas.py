@@ -46,3 +46,6 @@ class IngestionResult(BaseModel):
     updated_company_ids: list[str] = Field(
         default_factory=list, description="UUIDs of updated existing companies"
     )
+    imported_companies: list[dict[str, Any]] = Field(
+        default_factory=list, description="List of imported company detail payloads for UI"
+    )

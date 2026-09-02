@@ -254,12 +254,30 @@ async def create_company(
             },
         )
 
+    sheet_row_id = company_in.sheet_row_id
+    if not sheet_row_id:
+        try:
+            from app.integrations.google_sheets.client import GoogleSheetsClient
+            app_settings = get_settings()
+            if app_settings.google_sheets_spreadsheet_id:
+                sheets_client = GoogleSheetsClient(app_settings)
+                matched_row = sheets_client.find_company_row(
+                    spreadsheet_id=app_settings.google_sheets_spreadsheet_id,
+                    worksheet_name=app_settings.google_sheets_worksheet_name,
+                    company_name=clean_name,
+                    website_url=clean_url,
+                )
+                if matched_row:
+                    sheet_row_id = f"row_{matched_row}"
+        except Exception as exc:
+            logger.debug("Optional sheet row discovery skipped: %s", exc)
+
     company = await CompanyRepository.create(
         session=session,
         name=clean_name,
         website_url=clean_url,
         domain=domain,
-        sheet_row_id=company_in.sheet_row_id,
+        sheet_row_id=sheet_row_id,
         status=CompanyStatus.PENDING,
     )
     await session.commit()

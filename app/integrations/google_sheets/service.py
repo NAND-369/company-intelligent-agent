@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import Settings, get_settings
 from app.database.enums import SyncDirection, SyncStatus
-from app.database.repositories import CompanyRepository, SyncLogRepository
+from app.database.repositories import CompanyRepository, SyncLogRepository, VerdictRepository
 from app.integrations.google_sheets.client import (
     GoogleSheetsClient,
     GoogleSheetsClientProtocol,
@@ -40,7 +40,7 @@ class CompanyIngestionService:
     ) -> IngestionResult:
         """
         Execute full ingestion cycle from Google Sheets to PostgreSQL System of Record.
-        Returns IngestionResult with structured metrics and validation errors.
+        Returns IngestionResult with structured metrics, validation errors, and imported company objects.
         """
         target_spreadsheet_id = spreadsheet_id or self.settings.google_sheets_spreadsheet_id
         target_worksheet_name = worksheet_name or self.settings.google_sheets_worksheet_name
@@ -118,6 +118,27 @@ class CompanyIngestionService:
                     sync_direction=SyncDirection.SHEET_TO_DB,
                     status=SyncStatus.SUCCESS,
                 )
+
+                # Fetch latest verdict if company was already evaluated
+                latest_verdict = await VerdictRepository.get_latest_by_company(self.session, company.id)
+                fit_str = "—"
+                conf_str = "—"
+                if latest_verdict and latest_verdict.fit:
+                    raw_f = latest_verdict.fit.value if hasattr(latest_verdict.fit, "value") else str(latest_verdict.fit)
+                    fit_str = raw_f.replace("FitDecision.", "").upper()
+                    if latest_verdict.confidence is not None:
+                        conf_str = f"{round(latest_verdict.confidence * 100)}%"
+
+                result.imported_companies.append({
+                    "id": str(company.id),
+                    "name": company.name,
+                    "website_url": company.website_url,
+                    "domain": company.domain,
+                    "sheet_row_id": company.sheet_row_id,
+                    "status": company.status.value if hasattr(company.status, "value") else str(company.status),
+                    "fit": fit_str,
+                    "confidence": conf_str,
+                })
 
                 if created:
                     result.companies_created += 1
