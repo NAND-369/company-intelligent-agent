@@ -1217,11 +1217,11 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
 
       if (validJudged.length > 0) {
         html += validJudged.map(c => {
-          const fit = c.fit || 'UNCERTAIN';
-          let fitBadge = `<span class="badge badge-uncertain">UNCERTAIN</span>`;
+          const rawFit = c.fit || 'UNCERTAIN';
+          const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : 'UNCERTAIN').toUpperCase();
+          let fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
           if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
           else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
-          else if (fit === 'UNCERTAIN') fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
 
           const conf = (c.confidence !== null && c.confidence !== undefined) ? `${Math.round(c.confidence * 100)}%` : '—';
           const reasoningItems = Array.isArray(c.reasoning) ? c.reasoning : (c.reasoning ? [c.reasoning] : []);
@@ -1349,7 +1349,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         }
 
         const v = data.latest_verdict;
-        const fit = v.fit || 'UNCERTAIN';
+        const rawFit = v.fit || 'UNCERTAIN';
+        const fit = (typeof rawFit === 'string' ? rawFit.replace('FitDecision.', '') : 'UNCERTAIN').toUpperCase();
         let fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
         if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
         else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
@@ -1670,8 +1671,8 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             for (const r of results) {
               const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
               if (co) {
-                co.status = r.status;
-                co.fit = r.fit || '—';
+                co.status = (r.status || '').replace('CompanyStatus.', '');
+                co.fit = (r.fit || '—').replace('FitDecision.', '');
                 co.confidence = (r.confidence !== null && r.confidence !== undefined) ? `${Math.round(r.confidence * 100)}%` : '—';
                 co.is_synced = r.is_synced;
               }

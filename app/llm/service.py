@@ -100,10 +100,21 @@ class LLMJudgeService:
         await self.session.commit()
 
         logger.info(
+            "[DIAGNOSTIC_LLM] COMPANY_ID=%s COMPANY_NAME=%s SIGNALS_COUNT=%d RAW_FIT_INFERRED=%s PARSED_FIT=%s PARSED_CONFIDENCE=%.2f VERDICT_PERSISTED_ID=%s",
+            company.id,
+            company.name,
+            len(signals),
+            structured_verdict.fit.value,
+            structured_verdict.fit.value,
+            structured_verdict.confidence,
+            persisted_verdict.id,
+        )
+
+        logger.info(
             "Verdict successfully recorded for company '%s': Verdict id=%s (fit=%s, confidence=%.2f)",
             company.name,
             persisted_verdict.id,
-            persisted_verdict.fit,
+            persisted_verdict.fit.value,
             persisted_verdict.confidence,
         )
 

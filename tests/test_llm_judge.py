@@ -1062,3 +1062,80 @@ async def test_semantic_contradiction_in_reasoning_rejects_uncertain_and_repairs
     assert latest_db_verdict is not None
     assert latest_db_verdict.fit == FitDecision.NO
     assert latest_db_verdict.confidence >= 0.80
+
+
+@pytest.mark.asyncio
+async def test_semantic_contradiction_in_b2b_reasoning_rejects_uncertain_and_repairs_to_yes(
+    db_session: AsyncSession,
+) -> None:
+    """
+    Regression Test for B2B Semantic Contradiction Bug:
+    Given: Evidence establishes enterprise software / developer infrastructure platform.
+    When: Initial LLM response returns UNCERTAIN 0.98 with target B2B reasoning.
+    Then: Validation rejects the invalid response, triggers repair, and persists a valid YES verdict (confidence >= 0.80).
+    """
+    company = await CompanyRepository.create(
+        db_session,
+        name="Observability Cloud Platform",
+        website_url="https://www.observability-cloud.example.com",
+    )
+    await SignalRepository.create(
+        db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://www.observability-cloud.example.com",
+        extracted_facts={
+            "page_title": "Enterprise Cloud Monitoring & Observability Platform",
+            "meta_description": "Cloud monitoring, APM, log management, and developer APIs for enterprise systems.",
+            "headings_summary": ["Infrastructure Monitoring", "Developer REST APIs", "Enterprise Security"],
+        },
+    )
+
+    # Initial response: Contradictory UNCERTAIN 0.98
+    initial_flawed_response = json.dumps({
+        "reasoning": [
+            "Company is a B2B enterprise software platform",
+            "Evidence shows enterprise SaaS products"
+        ],
+        "disqualified_by_evidence": False,
+        "disqualification_reason": None,
+        "qualified_by_evidence": False,
+        "qualification_reason": None,
+        "fit": "UNCERTAIN",
+        "confidence": 0.98,
+        "confidence_rationale": "Strong confidence in evidence analysis.",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    # Repaired response: Corrected YES with high confidence
+    repaired_valid_response = json.dumps({
+        "reasoning": [
+            "Company is a B2B enterprise software platform",
+            "Evidence shows enterprise SaaS products and cloud developer infrastructure."
+        ],
+        "disqualified_by_evidence": False,
+        "disqualification_reason": None,
+        "qualified_by_evidence": True,
+        "qualification_reason": "Enterprise cloud monitoring and developer APIs.",
+        "fit": "YES",
+        "confidence": 0.95,
+        "confidence_rationale": "High confidence grounded in explicit enterprise SaaS signals.",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    fake_client = FakeLLMClient(responses=[initial_flawed_response, repaired_valid_response])
+    judge_service = LLMJudgeService(session=db_session, llm_client=fake_client)
+
+    verdict = await judge_service.evaluate_company(company.id)
+
+    assert verdict.fit == FitDecision.YES
+    assert verdict.confidence >= 0.80
+    assert verdict.follow_up_question is None
+
+    # Verify persisted DB verdict
+    latest_db_verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert latest_db_verdict is not None
+    assert latest_db_verdict.fit == FitDecision.YES
+    assert latest_db_verdict.confidence >= 0.80
