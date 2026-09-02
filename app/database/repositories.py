@@ -338,14 +338,21 @@ class VerdictRepository:
     async def get_latest_by_company(
         session: AsyncSession,
         company_id: uuid.UUID,
+        valid_only: bool = True,
     ) -> Optional[Verdict]:
-        """Retrieve the most recent evaluation verdict for a company."""
-        stmt = (
-            select(Verdict)
-            .where(Verdict.company_id == company_id)
-            .order_by(Verdict.evaluated_at.desc(), Verdict.id.desc())
-            .limit(1)
-        )
+        """
+        Retrieve the most recent evaluation verdict for a company.
+        By default (valid_only=True), filters out invalid legacy verdicts (UNCERTAIN with confidence >= 0.50).
+        """
+        stmt = select(Verdict).where(Verdict.company_id == company_id)
+        if valid_only:
+            stmt = stmt.where(
+                ~and_(
+                    Verdict.fit == FitDecision.UNCERTAIN,
+                    Verdict.confidence >= 0.50,
+                )
+            )
+        stmt = stmt.order_by(Verdict.evaluated_at.desc(), Verdict.id.desc()).limit(1)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 

@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import app.database.session as session_module
 
         async with session_module.async_session_factory() as session:
+            # Recover dangling RUNNING pipeline runs from previous server instance
             stmt = (
                 update(PipelineRun)
                 .where(PipelineRun.status == PipelineRunStatus.RUNNING)

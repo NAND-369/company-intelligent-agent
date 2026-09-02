@@ -899,3 +899,187 @@ async def test_existing_company_recompute_failure_preserves_company_and_previous
     from sqlalchemy import select, func
     count = await db_session.scalar(select(func.count()).select_from(Company).where(Company.name == "Sarvam AI"))
     assert count == 1
+
+
+# ==============================================================================
+# 16. Stale/Invalid Verdict Ingestion and Re-evaluation Isolation
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_stale_invalid_uncertain_verdict_is_overwritten_by_b2c_evaluation(db_session: AsyncSession) -> None:
+    """
+    Verify that:
+    1. A legacy invalid verdict (UNCERTAIN 0.95) in DB is NOT reused or preserved.
+    2. Processing with B2C signals correctly generates and persists NO with high confidence.
+    3. Run telemetry company_results reflects the newly evaluated NO verdict from the active run.
+    """
+    from sqlalchemy import text
+    from app.database.models import Verdict
+
+    # 1. Create company in DB
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Myntra Fashion",
+        website_url="https://www.myntra.com",
+        sheet_row_id="row_myntra_legacy",
+        status=CompanyStatus.JUDGED,
+    )
+    company_id = company.id
+    await db_session.commit()
+
+    # 2. Directly insert raw legacy invalid verdict bypassing ORM validation to simulate pre-migration DB state
+    from sqlalchemy import insert
+    stale_verdict_id = uuid.uuid4()
+    await db_session.execute(
+        insert(Verdict.__table__).values(
+            id=stale_verdict_id,
+            company_id=company_id,
+            fit=FitDecision.UNCERTAIN,
+            confidence=0.95,
+            reasoning=["Legacy pre-validation verdict"],
+            evaluated_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.commit()
+
+    # Verify stale verdict exists
+    stale_record = await db_session.get(Verdict, stale_verdict_id)
+    assert stale_record is not None
+    assert stale_record.fit == FitDecision.UNCERTAIN
+    assert stale_record.confidence == 0.95
+
+    # 3. Add B2C consumer signals
+    await SignalRepository.create(
+        session=db_session,
+        company_id=company_id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://www.myntra.com",
+        extracted_facts={
+            "page_title": "Online Shopping for Women, Men, Kids Fashion & Lifestyle - Myntra",
+            "headings_summary": ["Trending in Indian Wear", "Top Brands & Discounts", "Myntra Insider Rewards"],
+            "main_content_snippet": "Myntra is India's premier consumer fashion and e-commerce shopping platform.",
+        },
+    )
+    await db_session.commit()
+
+    # 4. Run pipeline on the company (force_reprocess=True to reprocess existing company)
+    from app.llm.client import FakeLLMClient as AppFakeLLMClient
+    llm_service = LLMJudgeService(session=db_session, llm_client=AppFakeLLMClient())
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[company_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=True,
+        )
+    )
+
+    # 5. Assert run telemetry
+    assert run_result.companies_processed == 1
+    assert run_result.companies_succeeded == 1
+    assert len(run_result.company_results) == 1
+
+    co_result = run_result.company_results[0]
+    assert co_result.status == CompanyStatus.JUDGED
+    assert co_result.fit_decision == FitDecision.NO
+    assert co_result.confidence >= 0.85
+
+    # 6. Verify latest DB verdict is NO, and does NOT match the stale verdict ID
+    latest_verdict = await VerdictRepository.get_latest_by_company(db_session, company_id)
+    assert latest_verdict is not None
+    assert latest_verdict.id != stale_verdict_id
+    assert latest_verdict.fit == FitDecision.NO
+    assert latest_verdict.confidence >= 0.85
+
+
+@pytest.mark.asyncio
+async def test_stale_invalid_verdict_recompute_failure_does_not_surface_invalid_verdict(db_session: AsyncSession) -> None:
+    """
+    Verify that if a company with ONLY an invalid legacy verdict (UNCERTAIN 0.95) fails recomputation:
+    1. It does NOT treat the invalid verdict as a valid prior verdict.
+    2. The run telemetry company_results marks status as FAILED with fit=None and confidence=None.
+    3. VerdictRepository.get_latest_by_company() returns None (does NOT surface the invalid verdict).
+    4. Historical record is preserved in the table for audit.
+    """
+    from sqlalchemy import insert
+    from app.database.models import Verdict
+
+    # 1. Create company in DB
+    company = await CompanyRepository.create(
+        session=db_session,
+        name="Legacy Stale Co",
+        website_url="https://legacy-stale.com",
+        sheet_row_id="row_legacy_fail",
+        status=CompanyStatus.JUDGED,
+    )
+    company_id = company.id
+    await db_session.commit()
+
+    # 2. Insert raw invalid legacy verdict
+    stale_verdict_id = uuid.uuid4()
+    await db_session.execute(
+        insert(Verdict.__table__).values(
+            id=stale_verdict_id,
+            company_id=company_id,
+            fit=FitDecision.UNCERTAIN,
+            confidence=0.95,
+            reasoning=["Legacy invalid verdict"],
+            evaluated_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.commit()
+
+    # Verify VerdictRepository.get_latest_by_company() ignores the invalid verdict
+    assert await VerdictRepository.get_latest_by_company(db_session, company_id) is None
+    # Verify historical listing still retains it for audit
+    all_history = await VerdictRepository.list_by_company(db_session, company_id)
+    assert len(all_history) == 1
+    assert all_history[0].id == stale_verdict_id
+
+    # 3. Trigger recomputation with simulated Gemini 429
+    llm_service = LLMJudgeService(
+        session=db_session,
+        llm_client=FakeLLMClient(raise_error=LLMClientError("Gemini API rate limit 429")),
+    )
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(
+        session=db_session,
+        processor=processor,
+    )
+
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[company_id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+            force_reprocess=True,
+        )
+    )
+
+    # 4. Assert failure is reported cleanly without surfacing the invalid verdict
+    assert run_result.companies_failed == 1
+    assert len(run_result.company_results) == 1
+    failed_result = run_result.company_results[0]
+    assert failed_result.status == CompanyStatus.FAILED
+    assert failed_result.fit_decision is None
+    assert failed_result.confidence is None
+    assert "429" in (failed_result.error or "")
+
+    # 5. Assert get_latest_by_company continues to return None
+    assert await VerdictRepository.get_latest_by_company(db_session, company_id) is None

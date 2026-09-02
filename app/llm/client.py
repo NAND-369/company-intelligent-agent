@@ -56,8 +56,21 @@ class FakeLLMClient(LLMClient):
         if self.responses:
             return self.responses.pop(0)
 
-        # Smart fallback heuristic for default testing
-        if "NO EVIDENCE SIGNALS AVAILABLE" in user_prompt or "error" in user_prompt.lower():
+        # Extract evidence snippet to avoid false positives on static rubric YAML text
+        evidence_text = ""
+        if "<untrusted_evidence_content>" in user_prompt:
+            evidence_text = user_prompt.split("<untrusted_evidence_content>")[1].split("</untrusted_evidence_content>")[0].lower()
+        else:
+            evidence_text = user_prompt.lower()
+
+        # 1. Missing or failed extraction signals -> UNCERTAIN with low confidence
+        if (
+            "no evidence signals available" in evidence_text
+            or "failed" in evidence_text
+            or "error" in evidence_text
+            or "404" in evidence_text
+            or "signalstatus.failed" in evidence_text
+        ):
             return json.dumps({
                 "fit": "UNCERTAIN",
                 "confidence": 0.2,
@@ -67,7 +80,9 @@ class FakeLLMClient(LLMClient):
                 "key_signals_used": [],
             })
 
-        if any(w in user_prompt.lower() for w in ("disqualif", "fashion", "clothing", "flipkart", "retail", "shopping", "b2c", "consumer")):
+
+        # 2. Explicit B2C Consumer Retail / Marketplace in evidence -> NO with high confidence
+        if any(w in evidence_text for w in ("fashion", "clothing", "flipkart", "myntra", "retail", "shopping", "b2c", "consumer")):
             return json.dumps({
                 "fit": "NO",
                 "confidence": 0.95,
@@ -79,6 +94,9 @@ class FakeLLMClient(LLMClient):
                 "follow_up_question": None,
                 "key_signals_used": ["HTTP_WEBSITE"],
             })
+
+
+
 
         return json.dumps({
             "fit": "YES",

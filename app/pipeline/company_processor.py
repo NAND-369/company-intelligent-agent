@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import Settings, get_settings
-from app.database.enums import CompanyStatus, SignalType
+from app.database.enums import CompanyStatus, FitDecision, SignalType
 from app.database.models import Company, Verdict
 from app.database.repositories import (
     CompanyRepository,
@@ -66,7 +66,11 @@ class CompanyProcessor:
         prior_status = company.status
         try:
             prior_verdict = await VerdictRepository.get_latest_by_company(self.session, company_id)
-            had_prior_verdict = prior_verdict is not None and prior_verdict.fit is not None
+            had_prior_verdict = (
+                prior_verdict is not None
+                and prior_verdict.fit is not None
+                and not (prior_verdict.fit == FitDecision.UNCERTAIN and prior_verdict.confidence >= 0.50)
+            )
         except Exception:
             had_prior_verdict = False
 
@@ -83,7 +87,11 @@ class CompanyProcessor:
             # 1. Check if company is already evaluated (unless force_reprocess is True)
             if not force_reprocess:
                 existing_verdict = await VerdictRepository.get_latest_by_company(self.session, company_id)
-                if company.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED) and existing_verdict is not None:
+                is_valid_verdict = (
+                    existing_verdict is not None
+                    and not (existing_verdict.fit == FitDecision.UNCERTAIN and existing_verdict.confidence >= 0.50)
+                )
+                if company.status in (CompanyStatus.JUDGED, CompanyStatus.SYNCED) and is_valid_verdict:
                     signals = await SignalRepository.list_by_company(self.session, company_id)
                     duration_ms = int((time.monotonic() - start_time) * 1000)
                     logger.info("Company '%s' already evaluated (verdict=%s). Skipping duplicate evaluation.", company_name, existing_verdict.fit)
@@ -94,6 +102,8 @@ class CompanyProcessor:
                         status=company.status,
                         fit_decision=existing_verdict.fit,
                         confidence=existing_verdict.confidence,
+                        reasoning=existing_verdict.reasoning if isinstance(existing_verdict.reasoning, list) else [str(existing_verdict.reasoning)],
+                        follow_up_question=existing_verdict.follow_up_question,
                         signals_count=len(signals),
                         duration_ms=duration_ms,
                     )
