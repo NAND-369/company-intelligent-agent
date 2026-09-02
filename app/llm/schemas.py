@@ -9,6 +9,11 @@ from app.database.enums import FitDecision
 class StructuredLLMVerdict(BaseModel):
     """Strict structured output contract for evidence-grounded company fit judgments with explicit precedence."""
 
+    reasoning: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of distinct, evidence-grounded deductive statements citing supplied facts"
+    )
     disqualified_by_evidence: bool = Field(
         default=False,
         description="True if verified evidence establishes a disqualifying business model/category (e.g. B2C e-commerce, consumer retail, fashion/clothing retail, groceries, consumer marketplace, physical goods, agency, parked domain)."
@@ -24,11 +29,6 @@ class StructuredLLMVerdict(BaseModel):
     qualification_reason: Optional[str] = Field(
         default=None,
         description="Specific citation from evidence explaining why company meets target criteria, or null."
-    )
-    reasoning: list[str] = Field(
-        ...,
-        min_length=1,
-        description="List of distinct, evidence-grounded deductive statements citing supplied facts"
     )
     fit: FitDecision = Field(
         ...,
@@ -79,8 +79,11 @@ class StructuredLLMVerdict(BaseModel):
         Enforce decision precedence & semantic consistency:
         1. If disqualified_by_evidence is True -> fit MUST be NO.
         2. Else if qualified_by_evidence is True -> fit MUST be YES.
-        3. UNCERTAIN verdict must have confidence < 0.50.
+        3. UNCERTAIN verdict must have confidence < 0.50 and non-null follow_up_question.
         4. YES or NO verdict must have confidence >= 0.50.
+        5. Semantic reasoning invariant: If reasoning explicitly cites disqualifying business model
+           (consumer retail, e-commerce shopping, apparel/fashion retail, consumer marketplace)
+           or states company is disqualified under rubric, fit MUST NOT be UNCERTAIN or YES.
         """
         if self.disqualified_by_evidence and self.fit != FitDecision.NO:
             raise ValueError(
@@ -92,10 +95,31 @@ class StructuredLLMVerdict(BaseModel):
                 f"Inconsistent model response: qualified_by_evidence is True, so fit MUST be YES (received fit={self.fit.value})."
             )
 
-        if self.fit == FitDecision.UNCERTAIN and self.confidence >= 0.50:
-            raise ValueError(
-                f"Inconsistent model response: UNCERTAIN verdict must have confidence < 0.50 (received {self.confidence})."
+        if self.fit == FitDecision.UNCERTAIN:
+            if self.confidence >= 0.50:
+                raise ValueError(
+                    f"Inconsistent model response: UNCERTAIN verdict must have confidence < 0.50 (received {self.confidence})."
+                )
+            if not self.follow_up_question or not self.follow_up_question.strip():
+                raise ValueError(
+                    "Inconsistent model response: UNCERTAIN verdict must provide a follow_up_question."
+                )
+            full_reasoning = " ".join(self.reasoning).lower()
+            disqualifying_phrases = (
+                "disqualifying",
+                "consumer-focused",
+                "consumer apparel",
+                "consumer retail",
+                "online shopping",
+                "fashion & lifestyle",
+                "fashion and lifestyle",
+                "consumer e-commerce",
+                "direct-to-consumer",
             )
+            if any(phrase in full_reasoning for phrase in disqualifying_phrases) and not self.disqualified_by_evidence:
+                raise ValueError(
+                    "Inconsistent model response: Reasoning explicitly identifies disqualifying consumer retail/e-commerce signals, but fit was marked UNCERTAIN instead of NO."
+                )
 
         if self.fit in (FitDecision.YES, FitDecision.NO) and self.confidence < 0.50:
             raise ValueError(

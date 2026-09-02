@@ -967,5 +967,98 @@ def test_decision_precedence_logic_independent_of_gemini_wording() -> None:
             "reasoning": ["Evidence is inconclusive."],
             "fit": "UNCERTAIN",
             "confidence": 0.85,
+            "follow_up_question": "Can you provide active URL?",
             "key_signals_used": [],
         })
+
+    # Invalid Case 7: Reasoning cites disqualifying consumer retail but fit=UNCERTAIN (Must reject)
+    with pytest.raises(ValueError, match="Reasoning explicitly identifies disqualifying consumer retail"):
+        StructuredLLMVerdict.model_validate({
+            "disqualified_by_evidence": False,
+            "qualified_by_evidence": False,
+            "reasoning": [
+                "Verified evidence confirms that the company is a consumer-focused online shopping platform.",
+                "The evidence establishes consumer fashion e-commerce and apparel retail."
+            ],
+            "fit": "UNCERTAIN",
+            "confidence": 0.30,
+            "follow_up_question": "Does the company also have B2B software?",
+            "key_signals_used": ["HTTP_WEBSITE"],
+        })
+
+
+@pytest.mark.asyncio
+async def test_semantic_contradiction_in_reasoning_rejects_uncertain_and_repairs_to_no(
+    db_session: AsyncSession,
+) -> None:
+    """
+    Regression Test for Semantic Contradiction Bug:
+    Given: Evidence establishes consumer fashion retail e-commerce.
+    When: Initial LLM response returns UNCERTAIN 0.98 with disqualifying reasoning.
+    Then: Validation rejects the invalid response, triggers repair, and persists a valid NO verdict (confidence >= 0.80).
+    """
+    company = await CompanyRepository.create(
+        db_session,
+        name="Fashion Retail Direct",
+        website_url="https://www.fashionretail-example.com",
+    )
+    await SignalRepository.create(
+        db_session,
+        company_id=company.id,
+        signal_type=SignalType.HTTP_WEBSITE,
+        source_url="https://www.fashionretail-example.com",
+        extracted_facts={
+            "page_title": "Online Shopping for Women, Men & Kids Fashion & Lifestyle",
+            "meta_description": "Online Shopping Site for Fashion & Lifestyle. Footwear, clothing, accessories.",
+            "headings_summary": ["Men Topwear", "Casual T-Shirts", "Customer Wishlist", "Rewards"],
+        },
+    )
+
+    # Initial response: Contradictory UNCERTAIN 0.98
+    initial_flawed_response = json.dumps({
+        "reasoning": [
+            "Verified evidence confirms that the company is a consumer-focused online shopping platform.",
+            "The evidence establishes consumer fashion e-commerce and apparel retail."
+        ],
+        "disqualified_by_evidence": False,
+        "disqualification_reason": None,
+        "qualified_by_evidence": False,
+        "qualification_reason": None,
+        "fit": "UNCERTAIN",
+        "confidence": 0.98,
+        "confidence_rationale": "High confidence based on extracted web content.",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    # Repaired response: Corrected NO with high confidence
+    repaired_valid_response = json.dumps({
+        "reasoning": [
+            "Verified evidence confirms that the company is a consumer-focused online shopping platform.",
+            "The evidence establishes consumer fashion e-commerce and apparel retail which is explicitly disqualifying."
+        ],
+        "disqualified_by_evidence": True,
+        "disqualification_reason": "Direct-to-consumer online fashion retail marketplace.",
+        "qualified_by_evidence": False,
+        "qualification_reason": None,
+        "fit": "NO",
+        "confidence": 0.95,
+        "confidence_rationale": "High confidence grounded in explicit consumer retail signals.",
+        "follow_up_question": None,
+        "key_signals_used": ["HTTP_WEBSITE"],
+    })
+
+    fake_client = FakeLLMClient(responses=[initial_flawed_response, repaired_valid_response])
+    judge_service = LLMJudgeService(session=db_session, llm_client=fake_client)
+
+    verdict = await judge_service.evaluate_company(company.id)
+
+    assert verdict.fit == FitDecision.NO
+    assert verdict.confidence >= 0.80
+    assert verdict.follow_up_question is None
+
+    # Verify persisted DB verdict
+    latest_db_verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert latest_db_verdict is not None
+    assert latest_db_verdict.fit == FitDecision.NO
+    assert latest_db_verdict.confidence >= 0.80

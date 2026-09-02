@@ -29,15 +29,15 @@ CONFIDENCE SCORE RULE:
 - Confidence measures certainty in the FINAL CLASSIFICATION decision, NOT confidence that evidence is incomplete.
 - A verdict of `fit: "UNCERTAIN"` with `confidence >= 0.50` is SEMANTICALLY INVALID and will be rejected.
 
-REQUIRED JSON OUTPUT FORMAT:
+REQUIRED JSON OUTPUT FORMAT (Strict execution order: reasoning MUST be generated first):
 {
+  "reasoning": [
+    "Specific evidence-grounded deductive statements citing extracted facts from the evidence"
+  ],
   "disqualified_by_evidence": boolean,
   "disqualification_reason": "Specific evidence citation or null",
   "qualified_by_evidence": boolean,
   "qualification_reason": "Specific evidence citation or null",
-  "reasoning": [
-    "Specific evidence-grounded deductive statements citing extracted facts"
-  ],
   "fit": "YES" | "NO" | "UNCERTAIN",
   "confidence": float (0.0 to 1.0),
   "confidence_rationale": "Brief explanation of the assigned confidence score",
@@ -122,24 +122,30 @@ ORIGINAL RAW RESPONSE:
 {raw_output}
 
 INSTRUCTION:
-The previous response is semantically inconsistent. Follow the mandatory decision precedence:
-1. If verified evidence establishes a disqualifying B2C / consumer retail / non-target business:
-   - Set disqualified_by_evidence: true
-   - Set fit: "NO" with high confidence (0.80 to 0.98). Do NOT return UNCERTAIN.
-2. If verified evidence establishes target B2B enterprise software / developer infrastructure:
-   - Set qualified_by_evidence: true
-   - Set fit: "YES" with high confidence (0.80 to 0.98).
-3. Only retain "UNCERTAIN" if evidence is genuinely insufficient, inaccessible, or contradictory:
-   - Set disqualified_by_evidence: false, qualified_by_evidence: false
-   - Confidence MUST be strictly below 0.50 (e.g. 0.20 to 0.40) with a non-null follow_up_question.
+The previous response is semantically inconsistent. You must follow the mandatory decision precedence:
+1. Examine the factual evidence cited in the reasoning:
+   - If the reasoning cites disqualifying consumer retail, B2C e-commerce, apparel/fashion shopping, groceries, consumer goods, or non-target characteristics:
+     * Set disqualified_by_evidence: true
+     * Set disqualification_reason: "Cites disqualifying consumer retail / B2C e-commerce"
+     * Set qualified_by_evidence: false
+     * Set fit: "NO" with high confidence (0.80 to 0.98). Do NOT return UNCERTAIN.
+   - If the reasoning cites target B2B enterprise software, developer APIs, AI infrastructure, or cloud platforms:
+     * Set qualified_by_evidence: true
+     * Set qualification_reason: "Cites target enterprise software / developer infrastructure"
+     * Set disqualified_by_evidence: false
+     * Set fit: "YES" with high confidence (0.80 to 0.98).
+   - If evidence is genuinely missing/failed (scraping errors, 404) or materially contradictory:
+     * Set disqualified_by_evidence: false
+     * Set qualified_by_evidence: false
+     * Set fit: "UNCERTAIN" with low confidence (< 0.50, e.g. 0.20 to 0.40) and provide follow_up_question.
 
 Return ONLY the corrected, valid JSON object conforming strictly to the required schema:
 {{
+  "reasoning": ["string statement"],
   "disqualified_by_evidence": boolean,
   "disqualification_reason": "string or null",
   "qualified_by_evidence": boolean,
   "qualification_reason": "string or null",
-  "reasoning": ["string statement"],
   "fit": "YES" | "NO" | "UNCERTAIN",
   "confidence": float (0.0 to 1.0),
   "confidence_rationale": "string",
