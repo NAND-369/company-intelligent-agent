@@ -49,6 +49,7 @@ class TriggerRunRequest(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    company_ids: Optional[list[uuid.UUID]] = Field(default=None, description="Explicit company UUIDs to process in this run")
     batch_size: int = Field(default=20, ge=1, le=500, description="Max pending companies to process")
     limit: Optional[int] = Field(default=None, ge=1, le=500, description="Alias for batch_size")
     force_reprocess: bool = Field(default=False, description="Re-evaluate companies even if previously synced")

@@ -132,45 +132,84 @@ class PipelineOrchestrator:
 
             # 3. Stage 2: Discover companies needing evaluation
             now = datetime.now(timezone.utc)
-            if req.force_reprocess:
-                stmt = (
-                    select(Company)
-                    .where(
-                        Company.status.in_([
-                            CompanyStatus.PENDING,
-                            CompanyStatus.ENRICHED,
-                            CompanyStatus.JUDGED,
-                            CompanyStatus.SYNCED,
-                        ])
-                    )
-                    .order_by(Company.created_at.asc())
-                )
-            else:
-                stmt = (
-                    select(Company)
-                    .where(
-                        or_(
-                            Company.status.in_([CompanyStatus.PENDING, CompanyStatus.ENRICHED]),
-                            and_(
-                                Company.status == CompanyStatus.PROCESSING,
-                                or_(
-                                    Company.lease_expires_at.is_(None),
-                                    Company.lease_expires_at < now,
-                                ),
-                            ),
+            if req.company_ids is not None:
+                if len(req.company_ids) == 0:
+                    candidates = []
+                else:
+                    if req.force_reprocess:
+                        stmt = (
+                            select(Company)
+                            .where(Company.id.in_(req.company_ids))
+                            .order_by(Company.created_at.asc())
                         )
+                    else:
+                        stmt = (
+                            select(Company)
+                            .where(
+                                Company.id.in_(req.company_ids),
+                                or_(
+                                    Company.status.in_([CompanyStatus.PENDING, CompanyStatus.ENRICHED]),
+                                    and_(
+                                        Company.status == CompanyStatus.PROCESSING,
+                                        or_(
+                                            Company.lease_expires_at.is_(None),
+                                            Company.lease_expires_at < now,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            .order_by(Company.created_at.asc())
+                        )
+                    if req.limit:
+                        stmt = stmt.limit(req.limit)
+                    candidates_res = await self.session.execute(stmt)
+                    candidates = list(candidates_res.scalars().all())
+            else:
+                if req.force_reprocess:
+                    stmt = (
+                        select(Company)
+                        .where(
+                            Company.status.in_([
+                                CompanyStatus.PENDING,
+                                CompanyStatus.ENRICHED,
+                                CompanyStatus.JUDGED,
+                                CompanyStatus.SYNCED,
+                            ])
+                        )
+                        .order_by(Company.created_at.asc())
                     )
-                    .order_by(Company.created_at.asc())
-                )
-            if req.limit:
-                stmt = stmt.limit(req.limit)
+                else:
+                    stmt = (
+                        select(Company)
+                        .where(
+                            or_(
+                                Company.status.in_([CompanyStatus.PENDING, CompanyStatus.ENRICHED]),
+                                and_(
+                                    Company.status == CompanyStatus.PROCESSING,
+                                    or_(
+                                        Company.lease_expires_at.is_(None),
+                                        Company.lease_expires_at < now,
+                                    ),
+                                ),
+                            )
+                        )
+                        .order_by(Company.created_at.asc())
+                    )
+                if req.limit:
+                    stmt = stmt.limit(req.limit)
 
-            candidates_res = await self.session.execute(stmt)
-            candidates = list(candidates_res.scalars().all())
+                candidates_res = await self.session.execute(stmt)
+                candidates = list(candidates_res.scalars().all())
+
             result.companies_discovered = len(candidates)
             candidate_infos = [(c.id, c.name, c.status) for c in candidates]
 
-            logger.info("Stage 2: Discovered %d candidate companies for processing (force_reprocess=%s).", len(candidates), req.force_reprocess)
+            logger.info(
+                "Stage 2: Discovered %d candidate companies for processing (force_reprocess=%s, scoped_ids=%s).",
+                len(candidates),
+                req.force_reprocess,
+                bool(req.company_ids is not None),
+            )
 
             # 4. Handle Dry Run Preview
             if req.dry_run:

@@ -17,6 +17,7 @@ class PipelineRunRequest(BaseModel):
     """Payload for triggering an on-demand pipeline execution."""
 
     run_id: Optional[uuid.UUID] = Field(default=None, description="Optional pre-allocated PipelineRun UUID to reuse")
+    company_ids: Optional[list[uuid.UUID]] = Field(default=None, description="Explicit company UUIDs to process in this run (if provided, only these companies are evaluated)")
     limit: Optional[int] = Field(default=None, ge=1, le=500, description="Max companies to process in this run")
     force_reprocess: bool = Field(default=False, description="Re-evaluate companies even if previously synced or judged")
     dry_run: bool = Field(default=False, description="Preview actions without mutating database state")

@@ -913,10 +913,10 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         <div class="col-span-9">
           <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
             <h2 class="section-heading-large" style="margin-bottom: 0;">COMPANIES</h2>
-            <button class="key-btn" onclick="loadCompanies()">REFRESH LIST</button>
+            <button class="key-btn" onclick="clearSessionCompanies()">CLEAR WORKING LIST</button>
           </div>
           <p class="section-subtext" style="margin-top: 0.75rem;">
-            Current company records stored in PostgreSQL awaiting or completed evaluation.
+            Companies added during the current dashboard session awaiting or evaluated by the pipeline.
           </p>
 
           <div class="table-container">
@@ -933,7 +933,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
               </thead>
               <tbody id="companiesTableBody">
                 <tr>
-                  <td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading companies from database...</td>
+                  <td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet.</td>
                 </tr>
               </tbody>
             </table>
@@ -953,13 +953,13 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         <div class="col-span-9">
           <h2 class="section-heading-large">RUN PIPELINE</h2>
           <p class="section-subtext">
-            Trigger end-to-end intelligence execution: Discover eligible companies, collect independent HTTP and browser signals, judge with Gemini 3.1 Flash-Lite, and write results back to Google Sheets.
+            Trigger end-to-end intelligence execution: Process current session companies, collect independent HTTP and browser signals, judge with Gemini 3.1 Flash-Lite, and write results back to Google Sheets.
           </p>
 
           <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
             <button id="runPipelineBtn" class="btn btn-primary" onclick="triggerPipelineRun()">RUN PIPELINE</button>
             <label class="mono-text" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already synced companies
+              <input type="checkbox" id="forceReprocessCheckbox" /> Force reprocess already evaluated companies
             </label>
           </div>
 
@@ -1042,28 +1042,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           </p>
 
           <div id="latestRunVerdictsList" class="verdicts-list">
-            <div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No pipeline run has been executed in this session yet. Click "RUN PIPELINE" above to process companies.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 05.B / HISTORICAL PERSISTED RESULTS SECTION -->
-  <section class="section-wrap">
-    <div class="container">
-      <div class="grid-12">
-        <div class="col-span-3">
-          <div class="label-meta">05.B / ARCHIVE</div>
-        </div>
-        <div class="col-span-9">
-          <h2 class="section-heading-large">HISTORICAL RESULTS</h2>
-          <p class="section-subtext">
-            All previously evaluated companies persisted in the PostgreSQL System of Record.
-          </p>
-
-          <div id="historicalVerdictsList" class="verdicts-list">
-            <div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">Loading historical verdicts from PostgreSQL...</div>
+            <div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No pipeline run has been executed in this session yet. Add companies above and click "RUN PIPELINE".</div>
           </div>
         </div>
       </div>
@@ -1133,6 +1112,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
   <!-- JAVASCRIPT DASHBOARD LOGIC -->
   <script>
     let activePollingInterval = null;
+    let sessionCompanies = [];
 
     function getApiKey() {
       return localStorage.getItem('agent_api_key') || '';
@@ -1189,56 +1169,43 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       }
     }
 
-    async function loadCompanies() {
+    function clearSessionCompanies() {
+      sessionCompanies = [];
+      renderSessionCompanies();
+      const notice = document.getElementById('addCompanyNotice');
+      notice.className = 'alert-box';
+      notice.style.display = 'none';
+    }
+
+    function renderSessionCompanies() {
       const tbody = document.getElementById('companiesTableBody');
-      try {
-        const res = await fetch('/companies?limit=100', { headers: getHeaders() });
-        if (res.status === 401) {
-          tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align:center; color: var(--red); padding: 2rem;">Authentication required. Click "Set API Key" above to configure.</td></tr>`;
-          return;
-        }
-        if (!res.ok) {
-          tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align:center; color: var(--red); padding: 2rem;">Failed to load companies (HTTP ${res.status}).</td></tr>`;
-          return;
-        }
-
-        const data = await res.json();
-        const items = data.items || [];
-
-        if (items.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align:center; color: var(--text-muted); padding: 2rem;">No companies registered yet. Sync from Google Sheet or add one above.</td></tr>`;
-          renderHistoricalVerdicts([]);
-          return;
-        }
-
-        tbody.innerHTML = items.map(c => {
-          const v = c.latest_verdict;
-          const fit = v ? v.fit : '—';
-          let fitBadge = `<span class="badge badge-pending">—</span>`;
-          if (fit === 'YES') fitBadge = `<span class="badge badge-yes">YES</span>`;
-          else if (fit === 'NO') fitBadge = `<span class="badge badge-no">NO</span>`;
-          else if (fit === 'UNCERTAIN') fitBadge = `<span class="badge badge-uncertain">UNCERTAIN</span>`;
-
-          const conf = (v && v.confidence !== null && v.confidence !== undefined) ? `${Math.round(v.confidence * 100)}%` : '—';
-          const statusClass = `badge-${(c.status || 'pending').toLowerCase()}`;
-          const sheetRow = c.sheet_row_id || '—';
-
-          return `
-            <tr>
-              <td><strong>${escapeHtml(c.name)}</strong></td>
-              <td class="mono-text" style="font-size:13px; color:var(--text-secondary);">${escapeHtml(c.website_url || c.domain || '—')}</td>
-              <td class="mono-text" style="font-size:12px;">${escapeHtml(sheetRow)}</td>
-              <td><span class="badge ${statusClass}">${escapeHtml(c.status || 'PENDING')}</span></td>
-              <td>${fitBadge}</td>
-              <td class="mono-text" style="font-weight:700;">${conf}</td>
-            </tr>
-          `;
-        }).join('');
-
-        renderHistoricalVerdicts(items);
-      } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align:center; color: var(--red); padding: 2rem;">Error fetching companies: ${err.message}</td></tr>`;
+      if (sessionCompanies.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="mono-text" style="text-align: center; color: var(--text-muted); padding: 2rem;">No companies added yet.</td></tr>`;
+        return;
       }
+
+      tbody.innerHTML = sessionCompanies.map(c => {
+        const fit = c.fit || '—';
+        let fitBadge = `<span class="badge badge-pending">—</span>`;
+        if (fit === 'YES') fitBadge = `<span class="badge badge-yes">YES</span>`;
+        else if (fit === 'NO') fitBadge = `<span class="badge badge-no">NO</span>`;
+        else if (fit === 'UNCERTAIN') fitBadge = `<span class="badge badge-uncertain">UNCERTAIN</span>`;
+
+        const conf = (c.confidence !== null && c.confidence !== undefined && c.confidence !== '—') ? (typeof c.confidence === 'number' ? `${Math.round(c.confidence * 100)}%` : c.confidence) : '—';
+        const statusClass = `badge-${(c.status || 'pending').toLowerCase()}`;
+        const sheetRow = c.sheet_row_id || '—';
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(c.name)}</strong></td>
+            <td class="mono-text" style="font-size:13px; color:var(--text-secondary);">${escapeHtml(c.website_url || '—')}</td>
+            <td class="mono-text" style="font-size:12px;">${escapeHtml(sheetRow)}</td>
+            <td><span class="badge ${statusClass}">${escapeHtml(c.status || 'PENDING')}</span></td>
+            <td>${fitBadge}</td>
+            <td class="mono-text" style="font-weight:700;">${conf}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderLatestRunResults(companyResults, runMetrics) {
@@ -1260,7 +1227,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       if (failed.length > 0) {
         html += `
           <div class="alert-box error" style="display:block; margin-bottom: 1.5rem;">
-            ⚠️ ${failed.length} company evaluation(s) encountered provider/network failures and were excluded from valid results:
+            ⚠️ ${failed.length} company evaluation(s) encountered technical provider/network failures and were removed from PostgreSQL:
             <ul style="margin-top:0.5rem; padding-left:1.25rem;">
               ${failed.map(f => `<li><strong>${escapeHtml(f.company_name)}</strong>: ${escapeHtml(f.error || 'Evaluation failure')}</li>`).join('')}
             </ul>
@@ -1324,66 +1291,6 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       container.innerHTML = html;
     }
 
-    function renderHistoricalVerdicts(companies) {
-      const container = document.getElementById('historicalVerdictsList');
-      const judged = companies.filter(c => c.latest_verdict && c.latest_verdict.fit);
-
-      if (judged.length === 0) {
-        container.innerHTML = `<div class="mono-text" style="color: var(--text-muted); padding: 1.5rem 0;">No historical evaluations stored in PostgreSQL.</div>`;
-        return;
-      }
-
-      container.innerHTML = judged.map(c => {
-        const v = c.latest_verdict;
-        const fit = v.fit || 'UNCERTAIN';
-        let fitBadge = `<span class="badge badge-uncertain">UNCERTAIN</span>`;
-        if (fit === 'YES') fitBadge = `<span class="badge badge-yes" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: YES</span>`;
-        else if (fit === 'NO') fitBadge = `<span class="badge badge-no" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: NO</span>`;
-        else if (fit === 'UNCERTAIN') fitBadge = `<span class="badge badge-uncertain" style="font-size:14px; padding:0.35rem 0.75rem;">FIT: UNCERTAIN</span>`;
-
-        const conf = (v.confidence !== null && v.confidence !== undefined) ? `${Math.round(v.confidence * 100)}%` : '—';
-        const reasoningItems = Array.isArray(v.reasoning) ? v.reasoning : [v.reasoning];
-
-        return `
-          <div class="verdict-card">
-            <div class="verdict-top">
-              <div>
-                <span class="verdict-co-name">${escapeHtml(c.name)}</span>
-                <span class="verdict-co-url">${escapeHtml(c.website_url || c.domain || '')}</span>
-              </div>
-              <div class="mono-text" style="font-size:11px; color:var(--text-muted);">
-                ${c.sheet_row_id ? `SHEET: ${escapeHtml(c.sheet_row_id)} &bull; ` : ''}EVALUATED: ${v.evaluated_at ? new Date(v.evaluated_at).toLocaleString() : 'RECENT'}
-              </div>
-            </div>
-
-            <div class="verdict-decision-grid">
-              <div>
-                <div class="verdict-block-title">DECISION</div>
-                <div>${fitBadge}</div>
-              </div>
-              <div>
-                <div class="verdict-block-title">CONFIDENCE</div>
-                <div class="mono-text" style="font-size: 20px; font-weight: 800;">${conf}</div>
-              </div>
-              <div>
-                <div class="verdict-block-title">EVIDENCE REASONING</div>
-                <ul class="reasoning-list">
-                  ${reasoningItems.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
-                </ul>
-              </div>
-            </div>
-
-            ${v.follow_up_question ? `
-              <div class="followup-box">
-                <span class="mono-text" style="font-size:10px; font-weight:700; letter-spacing:0.15em; color:var(--accent); display:block; margin-bottom:0.25rem;">SUGGESTED DISCOVERY FOLLOW-UP:</span>
-                ${escapeHtml(v.follow_up_question)}
-              </div>
-            ` : ''}
-          </div>
-        `;
-      }).join('');
-    }
-
     async function syncFromGoogleSheet() {
       const btn = document.getElementById('syncSheetBtn');
       const notice = document.getElementById('sheetSyncNotice');
@@ -1401,6 +1308,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         if (res.status === 401) {
           notice.className = 'alert-box error';
           notice.innerText = 'Authentication required. Click "Set API Key" above to configure your key.';
+          notice.style.display = 'block';
           return;
         }
 
@@ -1408,14 +1316,16 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         if (res.ok && data.status === 'success') {
           notice.className = 'alert-box success';
           notice.innerText = `✓ Sheet sync complete: ${data.rows_read} rows read, ${data.companies_created} created, ${data.companies_updated} updated, ${data.rows_skipped} skipped.`;
-          await loadCompanies();
+          notice.style.display = 'block';
         } else {
           notice.className = 'alert-box error';
           notice.innerText = `Sync failed: ${data.errors ? data.errors.join(', ') : (data.detail || 'Unknown error')}`;
+          notice.style.display = 'block';
         }
       } catch (err) {
         notice.className = 'alert-box error';
         notice.innerText = `Network error during sync: ${err.message}`;
+        notice.style.display = 'block';
       } finally {
         btn.disabled = false;
         btn.innerText = 'SYNC SHEET';
@@ -1430,6 +1340,17 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
       const website_url = document.getElementById('compUrl').value.trim();
 
       if (!name || !website_url) return;
+
+      // 1. Check if duplicate in current working list
+      const duplicateInSession = sessionCompanies.some(
+        c => c.name.toLowerCase() === name.toLowerCase() || c.website_url.toLowerCase() === website_url.toLowerCase()
+      );
+      if (duplicateInSession) {
+        notice.className = 'alert-box error';
+        notice.innerText = `${name} already exists`;
+        notice.style.display = 'block';
+        return;
+      }
 
       btn.disabled = true;
       btn.innerText = 'ADDING...';
@@ -1446,22 +1367,39 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
         if (res.status === 401) {
           notice.className = 'alert-box error';
           notice.innerText = 'Authentication required. Click "Set API Key" above to configure your key.';
+          notice.style.display = 'block';
           return;
         }
 
         const data = await res.json();
         if (res.ok) {
+          sessionCompanies.push({
+            id: data.id,
+            name: data.name,
+            website_url: data.website_url,
+            status: data.status || 'PENDING',
+            fit: '—',
+            confidence: '—',
+            sheet_row_id: data.sheet_row_id || '—',
+          });
+          renderSessionCompanies();
           notice.className = 'alert-box success';
-          notice.innerText = `✓ Successfully registered ${data.name} (Status: ${data.status})`;
+          notice.innerText = `✓ ${data.name} added successfully`;
+          notice.style.display = 'block';
           document.getElementById('addCompanyForm').reset();
-          await loadCompanies();
+        } else if (res.status === 409) {
+          notice.className = 'alert-box error';
+          notice.innerText = `${name} already exists`;
+          notice.style.display = 'block';
         } else {
           notice.className = 'alert-box error';
           notice.innerText = `Error adding company: ${data.detail || (data.error && data.error.message) || 'Request rejected'}`;
+          notice.style.display = 'block';
         }
       } catch (err) {
         notice.className = 'alert-box error';
         notice.innerText = `Network error: ${err.message}`;
+        notice.style.display = 'block';
       } finally {
         btn.disabled = false;
         btn.innerText = 'ADD COMPANY';
@@ -1471,6 +1409,23 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     async function triggerPipelineRun() {
       const btn = document.getElementById('runPipelineBtn');
       const forceReprocess = document.getElementById('forceReprocessCheckbox').checked;
+
+      if (sessionCompanies.length === 0) {
+        const monitor = document.getElementById('pipelineMonitor');
+        monitor.style.display = 'block';
+        document.getElementById('syncConfirmationBanner').style.display = 'none';
+        document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
+        document.getElementById('runStatusBadge').innerText = 'NO COMPANIES';
+        document.getElementById('runIdDisplay').innerText = 'No companies added to the current working list.';
+        document.getElementById('metricDiscovered').innerText = 0;
+        document.getElementById('metricProcessed').innerText = 0;
+        document.getElementById('metricSuccess').innerText = 0;
+        document.getElementById('metricSynced').innerText = 0;
+        document.getElementById('metricDecisions').innerText = '—';
+        renderLatestRunResults([], { processed_count: 0 });
+        return;
+      }
+
       btn.disabled = true;
       btn.innerText = 'DISPATCHING...';
 
@@ -1492,6 +1447,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
           method: 'POST',
           headers: getHeaders(),
           body: JSON.stringify({
+            company_ids: sessionCompanies.map(c => c.id),
             sync_to_sheets: true,
             force_reprocess: forceReprocess,
           }),
@@ -1597,11 +1553,21 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             document.getElementById('runPipelineBtn').disabled = false;
             document.getElementById('runPipelineBtn').innerText = 'RUN PIPELINE';
 
-            // Render run-specific results exclusively
-            renderLatestRunResults(data.company_results || [], metrics);
+            // Update session working list with latest results
+            const results = data.company_results || [];
+            for (const r of results) {
+              const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
+              if (co) {
+                co.status = r.status;
+                co.fit = r.fit || '—';
+                co.confidence = (r.confidence !== null && r.confidence !== undefined) ? `${Math.round(r.confidence * 100)}%` : '—';
+                co.is_synced = r.is_synced;
+              }
+            }
+            renderSessionCompanies();
 
-            // Refresh historical companies list
-            await loadCompanies();
+            // Render run-specific results exclusively
+            renderLatestRunResults(results, metrics);
           } else if (status === 'FAILED') {
             clearInterval(activePollingInterval);
             document.getElementById('runStatusBadge').className = 'monitor-status status-failed';
@@ -1610,8 +1576,16 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
             document.getElementById('runPipelineBtn').disabled = false;
             document.getElementById('runPipelineBtn').innerText = 'RUN PIPELINE';
 
-            renderLatestRunResults(data.company_results || [], metrics);
-            await loadCompanies();
+            const results = data.company_results || [];
+            for (const r of results) {
+              const co = sessionCompanies.find(c => c.id === r.company_id || c.name.toLowerCase() === r.company_name.toLowerCase());
+              if (co) {
+                co.status = r.status;
+              }
+            }
+            renderSessionCompanies();
+
+            renderLatestRunResults(results, metrics);
           }
         } catch (err) {
           console.warn('Polling error', err);
@@ -1637,7 +1611,7 @@ LANDING_PAGE_HTML = """<!DOCTYPE html>
     document.addEventListener('DOMContentLoaded', () => {
       updateApiKeyButton();
       checkHealth();
-      loadCompanies();
+      renderSessionCompanies();
     });
   </script>
 </body>

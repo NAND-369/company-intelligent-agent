@@ -485,3 +485,146 @@ async def test_stale_processing_company_recovered_by_pipeline(db_session: AsyncS
     assert reloaded is not None
     assert reloaded.status == CompanyStatus.JUDGED
     assert reloaded.lease_expires_at is None
+
+
+# ==============================================================================
+# 10. Dashboard Initial State & No Historical Results in HTML
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_landing_page_html_starts_with_empty_companies_and_no_historical_section(
+    async_client: AsyncClient,
+) -> None:
+    """Verify that the landing page starts with an empty working list and contains no historical section."""
+    resp = await async_client.get("/")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Verify initial table message
+    assert "No companies added yet." in html
+
+    # Verify 05.B / HISTORICAL RESULTS section is completely removed
+    assert "HISTORICAL RESULTS" not in html
+    assert "05.B / ARCHIVE" not in html
+    assert "renderHistoricalVerdicts" not in html
+    assert "loadCompanies()" not in html
+
+
+# ==============================================================================
+# 11. Pipeline Scoped Exclusively to Explicit Company IDs
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_pipeline_run_scoped_to_explicit_company_ids(db_session: AsyncSession) -> None:
+    """Verify that when company_ids is passed, only those specific companies are evaluated."""
+    # Pre-existing database companies that should NOT be touched
+    old_co1 = await CompanyRepository.create(db_session, "Old Co 1", "https://old1.com")
+    old_co2 = await CompanyRepository.create(db_session, "Old Co 2", "https://old2.com")
+    old_co3 = await CompanyRepository.create(db_session, "Old Co 3", "https://old3.com")
+
+    # Newly added session companies
+    datadog = await CompanyRepository.create(db_session, "Datadog", "https://datadoghq.com")
+    atlassian = await CompanyRepository.create(db_session, "Atlassian", "https://atlassian.com")
+    await db_session.commit()
+
+    llm_service = LLMJudgeService(session=db_session, llm_client=FakeLLMClient(default_verdict="YES"))
+    processor = CompanyProcessor(
+        session=db_session,
+        http_enrichment_service=MockHttpEnrichmentService(db_session),
+        llm_judge_service=llm_service,
+        enable_browser=False,
+    )
+    orchestrator = PipelineOrchestrator(session=db_session, processor=processor)
+
+    # Trigger run scoped ONLY to Datadog and Atlassian
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[datadog.id, atlassian.id],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+        )
+    )
+
+    assert run_result.companies_discovered == 2
+    assert run_result.companies_processed == 2
+    assert run_result.companies_succeeded == 2
+    assert {r.company_name for r in run_result.company_results} == {"Datadog", "Atlassian"}
+
+    # Verify old companies were NOT evaluated and remain PENDING
+    fresh_old1 = await CompanyRepository.get_by_id(db_session, old_co1.id)
+    fresh_old2 = await CompanyRepository.get_by_id(db_session, old_co2.id)
+    fresh_old3 = await CompanyRepository.get_by_id(db_session, old_co3.id)
+    assert fresh_old1.status == CompanyStatus.PENDING
+    assert fresh_old2.status == CompanyStatus.PENDING
+    assert fresh_old3.status == CompanyStatus.PENDING
+
+
+# ==============================================================================
+# 12. Pipeline Run with Empty company_ids Processes Zero
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_pipeline_run_empty_company_ids_processes_zero(db_session: AsyncSession) -> None:
+    """Verify that triggering a run with company_ids=[] processes 0 companies without touching DB records."""
+    await CompanyRepository.create(db_session, "Pre-existing 1", "https://pre1.com")
+    await CompanyRepository.create(db_session, "Pre-existing 2", "https://pre2.com")
+    await db_session.commit()
+
+    orchestrator = PipelineOrchestrator(session=db_session)
+    run_result = await orchestrator.run_pipeline(
+        PipelineRunRequest(
+            company_ids=[],
+            skip_ingestion=True,
+            sync_to_sheets=False,
+        )
+    )
+
+    assert run_result.companies_discovered == 0
+    assert run_result.companies_processed == 0
+    assert len(run_result.company_results) == 0
+
+
+# ==============================================================================
+# 13. Add Company API Success and Duplicate Feedback
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_api_add_company_success_and_duplicate_conflict(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify that POST /companies succeeds on new company and returns 409 Conflict on duplicate."""
+    settings = get_settings()
+    headers = {"X-API-Key": settings.api_key}
+
+    # 1. Add Datadog -> Success
+    res1 = await async_client.post(
+        "/companies",
+        json={"name": "Datadog", "website_url": "https://datadoghq.com"},
+        headers=headers,
+    )
+    assert res1.status_code == 201
+    data1 = res1.json()
+    assert data1["name"] == "Datadog"
+    assert data1["status"] == "PENDING"
+
+    # 2. Add Atlassian -> Success
+    res2 = await async_client.post(
+        "/companies",
+        json={"name": "Atlassian", "website_url": "https://atlassian.com"},
+        headers=headers,
+    )
+    assert res2.status_code == 201
+    data2 = res2.json()
+    assert data2["name"] == "Atlassian"
+
+    # 3. Add Duplicate Datadog -> 409 Conflict
+    res3 = await async_client.post(
+        "/companies",
+        json={"name": "Datadog", "website_url": "https://datadoghq.com"},
+        headers=headers,
+    )
+    assert res3.status_code == 409
+    res3_data = res3.json()
+    err_msg = res3_data.get("error", {}).get("message") or res3_data.get("detail", "")
+    assert "already exists" in err_msg

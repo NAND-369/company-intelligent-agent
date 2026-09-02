@@ -46,6 +46,7 @@ async def _run_pipeline_background(
             orchestrator = PipelineOrchestrator(session=session)
             pipeline_request = PipelineRunRequest(
                 run_id=run_id,
+                company_ids=req.company_ids,
                 limit=req.effective_batch_size,
                 force_reprocess=req.force_reprocess,
                 dry_run=req.dry_run,
