@@ -69,6 +69,19 @@ def test_browser_extractor_dynamic_jobs() -> None:
 # 2. Playwright Live Browser Execution with Dynamic JS Fixture
 # ==============================================================================
 
+def test_browser_client_standard_user_agent_and_headers() -> None:
+    """
+    Verify that PlaywrightBrowserClient uses a realistic modern Chrome User-Agent
+    without custom bot tokens and configures standard browser headers.
+    """
+    client = PlaywrightBrowserClient()
+    assert "Mozilla/5.0" in client.user_agent
+    assert "Chrome/124.0.0.0" in client.user_agent
+    assert "CompanyIntelligenceAgent" not in client.user_agent
+    assert "bot" not in client.user_agent.lower()
+    assert "crawler" not in client.user_agent.lower()
+
+
 @pytest.mark.asyncio
 async def test_playwright_renders_dynamic_javascript_content() -> None:
     """

@@ -140,8 +140,29 @@ def test_extractor_text_and_heading_bounds() -> None:
 
 
 # ==============================================================================
-# 2. EnrichmentHttpClient Error Handling Unit Tests
+# 2. EnrichmentHttpClient Configuration & Error Handling Unit Tests
 # ==============================================================================
+
+def test_http_client_standard_browser_user_agent_and_headers() -> None:
+    """
+    Verify that EnrichmentHttpClient uses a realistic modern Chrome User-Agent
+    without custom bot tokens and sets standard browser navigation headers.
+    """
+    client = EnrichmentHttpClient()
+    assert "Mozilla/5.0" in client.user_agent
+    assert "Chrome/124.0.0.0" in client.user_agent
+    assert "CompanyIntelligenceAgent" not in client.user_agent
+    assert "bot" not in client.user_agent.lower()
+    assert "crawler" not in client.user_agent.lower()
+
+    headers = client._get_headers()
+    assert headers["User-Agent"] == client.user_agent
+    assert "Accept" in headers
+    assert "Accept-Language" in headers
+    assert "Sec-Ch-Ua" in headers
+    assert "Sec-Fetch-Dest" in headers
+    assert "Sec-Fetch-Mode" in headers
+
 
 @pytest.mark.asyncio
 async def test_http_client_404_error() -> None:
