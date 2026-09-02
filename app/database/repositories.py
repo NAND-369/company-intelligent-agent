@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -119,11 +119,21 @@ class CompanyRepository:
         status: CompanyStatus,
     ) -> Optional[Company]:
         """Update a company's processing state."""
-        company = await CompanyRepository.get_by_id(session, company_id)
-        if company:
-            company.status = status
-            await session.flush()
-        return company
+        stmt = update(Company).where(Company.id == company_id).values(status=status)
+        await session.execute(stmt)
+        await session.flush()
+        return await CompanyRepository.get_by_id(session, company_id)
+
+    @staticmethod
+    async def delete(session: AsyncSession, company_id: uuid.UUID) -> bool:
+        """Delete a company and all associated child records (signals, verdicts, sync logs)."""
+        await SignalRepository.delete_by_company(session, company_id)
+        await VerdictRepository.delete_by_company(session, company_id)
+        await SyncLogRepository.delete_by_company(session, company_id)
+        stmt = delete(Company).where(Company.id == company_id)
+        result = await session.execute(stmt)
+        await session.flush()
+        return (result.rowcount or 0) > 0
 
     @staticmethod
     async def acquire_lease(
@@ -162,22 +172,32 @@ class CompanyRepository:
         company_id: uuid.UUID,
     ) -> bool:
         """Clear the processing lease lock on a company."""
-        company = await CompanyRepository.get_by_id(session, company_id)
-        if company:
-            company.lease_expires_at = None
-            await session.flush()
-            return True
-        return False
+        stmt = update(Company).where(Company.id == company_id).values(lease_expires_at=None)
+        await session.execute(stmt)
+        await session.flush()
+        return True
 
     @staticmethod
     async def get_pending_companies(
         session: AsyncSession,
         limit: int = 20,
     ) -> list[Company]:
-        """Retrieve companies in PENDING state awaiting processing."""
+        """Retrieve companies in PENDING state or stale PROCESSING awaiting processing."""
+        now = datetime.now(timezone.utc)
         stmt = (
             select(Company)
-            .where(Company.status == CompanyStatus.PENDING)
+            .where(
+                or_(
+                    Company.status == CompanyStatus.PENDING,
+                    and_(
+                        Company.status == CompanyStatus.PROCESSING,
+                        or_(
+                            Company.lease_expires_at.is_(None),
+                            Company.lease_expires_at < now,
+                        ),
+                    ),
+                )
+            )
             .order_by(Company.created_at.asc())
             .limit(limit)
         )
@@ -267,6 +287,17 @@ class SignalRepository:
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
+    @staticmethod
+    async def delete_by_company(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+    ) -> int:
+        """Delete all evidence signals for a company."""
+        stmt = delete(Signal).where(Signal.company_id == company_id)
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.rowcount
+
 
 class VerdictRepository:
     """Repository operations for Verdict entities."""
@@ -327,6 +358,17 @@ class VerdictRepository:
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
+    @staticmethod
+    async def delete_by_company(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+    ) -> int:
+        """Delete all evaluation verdicts for a company."""
+        stmt = delete(Verdict).where(Verdict.company_id == company_id)
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.rowcount
+
 
 class SyncLogRepository:
     """Repository operations for Google Sheets sync audit logs."""
@@ -363,6 +405,17 @@ class SyncLogRepository:
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def delete_by_company(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+    ) -> int:
+        """Delete all sync audit logs for a company."""
+        stmt = delete(SyncLog).where(SyncLog.company_id == company_id)
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.rowcount
 
 
 class PipelineRunRepository:

@@ -227,7 +227,7 @@ class CorruptJSONLLMClient(LLMClient):
 
 @pytest.mark.asyncio
 async def test_llm_judge_service_unavailable_fallback_uncertain(db_session: AsyncSession) -> None:
-    """Verify that complete LLM outage returns a deterministic UNCERTAIN verdict."""
+    """Verify that complete LLM outage raises LLMClientError and does not persist a verdict."""
     company = await CompanyRepository.create(
         session=db_session,
         name="Outage Fallback Co",
@@ -246,17 +246,18 @@ async def test_llm_judge_service_unavailable_fallback_uncertain(db_session: Asyn
     await db_session.commit()
 
     service = LLMJudgeService(session=db_session, llm_client=OutageLLMClient())
-    verdict = await service.evaluate_company(company.id)
+    with pytest.raises(LLMClientError):
+        await service.evaluate_company(company.id)
 
-    assert verdict.fit == FitDecision.UNCERTAIN
-    assert verdict.confidence == 0.0
-    assert any("outage" in r.lower() or "unavailable" in r.lower() for r in verdict.reasoning)
-    assert verdict.follow_up_question is not None
+    verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert verdict is None
 
 
 @pytest.mark.asyncio
 async def test_llm_judge_corrupt_json_fallback_uncertain(db_session: AsyncSession) -> None:
-    """Verify that un-repairable corrupted LLM responses gracefully fall back to UNCERTAIN."""
+    """Verify that un-repairable corrupted LLM responses raise LLMParseError and do not persist a verdict."""
+    from app.llm.parser import LLMParseError
+
     company = await CompanyRepository.create(
         session=db_session,
         name="Corrupt JSON Co",
@@ -275,11 +276,11 @@ async def test_llm_judge_corrupt_json_fallback_uncertain(db_session: AsyncSessio
     await db_session.commit()
 
     service = LLMJudgeService(session=db_session, llm_client=CorruptJSONLLMClient())
-    verdict = await service.evaluate_company(company.id)
+    with pytest.raises(LLMParseError):
+        await service.evaluate_company(company.id)
 
-    assert verdict.fit == FitDecision.UNCERTAIN
-    assert verdict.confidence == 0.0
-    assert any("validation" in r.lower() or "schema" in r.lower() for r in verdict.reasoning)
+    verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert verdict is None
 
 
 # ==============================================================================

@@ -182,13 +182,17 @@ async def get_run_status(
             detail=f"Pipeline run with ID '{run_id}' was not found.",
         )
 
-    # Parse errors from error_summary json
+    # Parse errors and company results from error_summary json
     error_list = []
+    company_results_list = []
     if run.error_summary and isinstance(run.error_summary, dict):
         if "errors" in run.error_summary and isinstance(run.error_summary["errors"], list):
             error_list = [{"error_message": err} for err in run.error_summary["errors"]]
         elif "fatal_error" in run.error_summary:
             error_list = [{"error_message": run.error_summary["fatal_error"]}]
+
+        if "company_results" in run.error_summary and isinstance(run.error_summary["company_results"], list):
+            company_results_list = run.error_summary["company_results"]
 
     return PipelineRunDetailResponse(
         run_id=run.id,
@@ -211,6 +215,7 @@ async def get_run_status(
             fit_uncertain=run.fit_uncertain_count,
         ),
         errors=error_list,
+        company_results=company_results_list,
     )
 
 

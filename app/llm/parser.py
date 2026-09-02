@@ -14,6 +14,10 @@ from app.llm.schemas import StructuredLLMVerdict
 logger = logging.getLogger(__name__)
 
 
+class LLMParseError(Exception):
+    """Raised when LLM output cannot be parsed or validated against the structured verdict schema."""
+
+
 class LLMOutputParser:
     """Parses, validates, and safely repairs raw LLM JSON outputs into StructuredLLMVerdict."""
 
@@ -48,6 +52,7 @@ class LLMOutputParser:
         """
         Parse raw model output into a validated StructuredLLMVerdict.
         Executes a 1-shot repair attempt if validation fails.
+        Raises LLMParseError if validation/repair cannot produce a valid verdict.
         """
         cleaned_json = cls.extract_json_block(raw_text)
 
@@ -75,17 +80,6 @@ class LLMOutputParser:
                     return verdict
                 except Exception as repair_err:
                     logger.error("1-shot JSON repair failed: %s", repair_err)
+                    raise LLMParseError(f"LLM output validation and repair failed: {repair_err}") from repair_err
 
-            # Safe fallback verdict when validation/repair fails
-            logger.warning("Returning safe UNCERTAIN fallback verdict.")
-            return StructuredLLMVerdict(
-                fit=FitDecision.UNCERTAIN,
-                confidence=0.0,
-                confidence_rationale="Evaluation could not be structured due to output validation failure.",
-                reasoning=[
-                    f"LLM response failed schema validation: {str(initial_err)[:200]}",
-                    "Raw evidence remains safely persisted in PostgreSQL for manual audit.",
-                ],
-                follow_up_question="Manual review required: please inspect company signals.",
-                key_signals_used=[],
-            )
+            raise LLMParseError(f"LLM output failed schema validation: {initial_err}") from initial_err

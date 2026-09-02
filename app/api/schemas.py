@@ -106,6 +106,7 @@ class PipelineRunDetailResponse(BaseModel):
     metrics: PipelineRunMetrics
     summary: PipelineRunSummary
     errors: list[dict[str, Any]] = Field(default_factory=list)
+    company_results: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CompanyVerdictSummary(BaseModel):

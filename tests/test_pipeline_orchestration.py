@@ -518,7 +518,7 @@ async def test_pipeline_six_companies_batch_resilience(db_session: AsyncSession)
     Verifies all 6 companies are processed, processed_count == 6, and leases are released.
     """
     # 1. Create 6 companies in PENDING state
-    created_companies = []
+    created_company_ids = []
     for i in range(1, 7):
         co = await CompanyRepository.create(
             session=db_session,
@@ -527,7 +527,7 @@ async def test_pipeline_six_companies_batch_resilience(db_session: AsyncSession)
             sheet_row_id=f"row_{i}",
             status=CompanyStatus.PENDING,
         )
-        created_companies.append(co)
+        created_company_ids.append(co.id)
     await db_session.commit()
 
     # 2. Setup Orchestrator with mock components
@@ -576,9 +576,13 @@ async def test_pipeline_six_companies_batch_resilience(db_session: AsyncSession)
     assert res.companies_failed == 1
     assert res.status == PipelineRunStatus.PARTIAL_FAILURE
 
-    # Verify all leases were cleared
-    for co in created_companies:
-        fresh = await CompanyRepository.get_by_id(db_session, co.id)
+    # Verify successful companies have cleared leases, and failed company 2 was deleted from DB
+    co2_id = created_company_ids[1]
+    co2_fresh = await CompanyRepository.get_by_id(db_session, co2_id)
+    assert co2_fresh is None  # Failed company was cleaned up from PostgreSQL
+
+    for co_id in [cid for cid in created_company_ids if cid != co2_id]:
+        fresh = await CompanyRepository.get_by_id(db_session, co_id)
         assert fresh is not None
         assert fresh.lease_expires_at is None
 

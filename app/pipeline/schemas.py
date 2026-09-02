@@ -34,6 +34,8 @@ class PipelineCompanyResult(BaseModel):
     status: CompanyStatus
     fit_decision: Optional[FitDecision] = None
     confidence: Optional[float] = None
+    reasoning: list[str] = Field(default_factory=list)
+    follow_up_question: Optional[str] = None
     signals_count: int = 0
     is_synced: bool = False
     error: Optional[str] = None

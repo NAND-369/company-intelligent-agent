@@ -64,46 +64,20 @@ class LLMJudgeService:
             rubric=self.rubric,
         )
 
-        # 3. Execute LLM inference with provider outage / error protection
-        raw_response = ""
-        structured_verdict: StructuredLLMVerdict
+        # 3. Execute LLM inference
+        raw_response = await self.llm_client.generate_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
 
-        try:
-            raw_response = await self.llm_client.generate_text(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-            )
-            # 4. Parse, validate, and execute 1-shot JSON repair if necessary
-            structured_verdict = await LLMOutputParser.parse_and_validate(
-                raw_text=raw_response,
-                llm_client=self.llm_client,
-                allow_repair=True,
-            )
-        except LLMClientError as exc:
-            logger.error("LLM Provider failure during evaluation of '%s': %s", company.name, exc)
-            structured_verdict = StructuredLLMVerdict(
-                fit=FitDecision.UNCERTAIN,
-                confidence=0.0,
-                confidence_rationale="Evaluation could not be completed due to LLM provider outage or rate limit.",
-                reasoning=[
-                    f"Provider error occurred: {exc!s}",
-                    "Evidence signals remain safely persisted in PostgreSQL for retry.",
-                ],
-                follow_up_question="Retry evaluation after provider availability is restored.",
-                key_signals_used=[],
-            )
-        except Exception as exc:
-            logger.error("Unexpected error during LLM evaluation of '%s': %s", company.name, exc)
-            structured_verdict = StructuredLLMVerdict(
-                fit=FitDecision.UNCERTAIN,
-                confidence=0.0,
-                confidence_rationale="Unexpected system error during evaluation.",
-                reasoning=[f"Unexpected error: {exc!s}"],
-                follow_up_question="Manual review recommended.",
-                key_signals_used=[],
-            )
+        # 4. Parse, validate, and execute 1-shot JSON repair if necessary
+        structured_verdict: StructuredLLMVerdict = await LLMOutputParser.parse_and_validate(
+            raw_text=raw_response,
+            llm_client=self.llm_client,
+            allow_repair=True,
+        )
 
-        # 5. Persist Verdict in PostgreSQL System of Record
+        # 5. Persist valid Verdict in PostgreSQL System of Record
         persisted_verdict = await VerdictRepository.create(
             session=self.session,
             company_id=company.id,

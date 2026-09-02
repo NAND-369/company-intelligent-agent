@@ -3,9 +3,10 @@
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import Settings, get_settings
@@ -130,22 +131,44 @@ class PipelineOrchestrator:
                     result.errors.append(msg)
 
             # 3. Stage 2: Discover companies needing evaluation
-            statuses = (
-                [CompanyStatus.PENDING, CompanyStatus.ENRICHED, CompanyStatus.JUDGED, CompanyStatus.SYNCED]
-                if req.force_reprocess
-                else [CompanyStatus.PENDING, CompanyStatus.ENRICHED]
-            )
-            stmt = (
-                select(Company)
-                .where(Company.status.in_(statuses))
-                .order_by(Company.created_at.asc())
-            )
+            now = datetime.now(timezone.utc)
+            if req.force_reprocess:
+                stmt = (
+                    select(Company)
+                    .where(
+                        Company.status.in_([
+                            CompanyStatus.PENDING,
+                            CompanyStatus.ENRICHED,
+                            CompanyStatus.JUDGED,
+                            CompanyStatus.SYNCED,
+                        ])
+                    )
+                    .order_by(Company.created_at.asc())
+                )
+            else:
+                stmt = (
+                    select(Company)
+                    .where(
+                        or_(
+                            Company.status.in_([CompanyStatus.PENDING, CompanyStatus.ENRICHED]),
+                            and_(
+                                Company.status == CompanyStatus.PROCESSING,
+                                or_(
+                                    Company.lease_expires_at.is_(None),
+                                    Company.lease_expires_at < now,
+                                ),
+                            ),
+                        )
+                    )
+                    .order_by(Company.created_at.asc())
+                )
             if req.limit:
                 stmt = stmt.limit(req.limit)
 
             candidates_res = await self.session.execute(stmt)
             candidates = list(candidates_res.scalars().all())
             result.companies_discovered = len(candidates)
+            candidate_infos = [(c.id, c.name, c.status) for c in candidates]
 
             logger.info("Stage 2: Discovered %d candidate companies for processing (force_reprocess=%s).", len(candidates), req.force_reprocess)
 
@@ -160,19 +183,24 @@ class PipelineOrchestrator:
             # 5. Stage 3: Process companies with bounded concurrency and leasing
             semaphore = asyncio.Semaphore(self.settings.pipeline_max_concurrency)
 
-            for company in candidates:
+            for co_id, co_name, initial_status in candidate_infos:
                 async with semaphore:
                     try:
                         has_lease = await CompanyRepository.acquire_lease(
                             session=self.session,
-                            company_id=company.id,
+                            company_id=co_id,
                             lease_duration_minutes=self.settings.pipeline_lease_duration_minutes,
                             force=req.force_reprocess,
                         )
                         await self.session.commit()
 
-                        if not has_lease and company.status != CompanyStatus.PROCESSING:
-                            logger.info("Company '%s' is leased by another worker. Skipping.", company.name)
+                        if not has_lease and initial_status != CompanyStatus.PROCESSING:
+                            logger.info("Company '%s' is leased by another worker. Skipping.", co_name)
+                            continue
+
+                        company = await CompanyRepository.get_by_id(self.session, co_id)
+                        if not company:
+                            logger.warning("Company '%s' (id=%s) no longer exists. Skipping.", co_name, co_id)
                             continue
 
                         co_result = await self.processor.process_company(
@@ -196,11 +224,11 @@ class PipelineOrchestrator:
                                 try:
                                     logger.info(
                                         "Synchronizing verdict for '%s' to Google Sheets (force=%s)...",
-                                        company.name,
+                                        co_name,
                                         req.force_reprocess,
                                     )
                                     sync_res = await self.sync_service.sync_company(
-                                        company_id=company.id,
+                                        company_id=co_id,
                                         force=req.force_reprocess,
                                         dry_run=req.dry_run,
                                     )
@@ -209,38 +237,34 @@ class PipelineOrchestrator:
                                         co_result.status = CompanyStatus.SYNCED
                                         result.synced_count += 1
                                     elif sync_res.error_details:
-                                        result.errors.append(f"Sync error for {company.name}: {sync_res.error_details}")
+                                        result.errors.append(f"Sync error for {co_name}: {sync_res.error_details}")
                                 except Exception as sync_exc:
-                                    msg = f"Unexpected sync error for {company.name}: {sync_exc!s}"
+                                    msg = f"Unexpected sync error for {co_name}: {sync_exc!s}"
                                     logger.error(msg)
                                     result.errors.append(msg)
                         else:
                             result.companies_failed += 1
                             if co_result.error:
-                                result.errors.append(f"Company {company.name}: {co_result.error}")
+                                result.errors.append(f"Company {co_name}: {co_result.error}")
 
                     except Exception as loop_co_exc:
-                        logger.exception("Unexpected error processing company '%s': %s", company.name, loop_co_exc)
+                        logger.exception("Unexpected error processing company '%s': %s", co_name, loop_co_exc)
                         result.companies_failed += 1
                         result.companies_processed += 1
-                        result.errors.append(f"Company {company.name} unhandled error: {loop_co_exc!s}")
+                        result.errors.append(f"Company {co_name} unhandled error: {loop_co_exc!s}")
                         try:
                             await self.session.rollback()
-                            await CompanyRepository.update_status(
-                                session=self.session,
-                                company_id=company.id,
-                                status=CompanyStatus.FAILED,
-                            )
+                            await CompanyRepository.delete(self.session, co_id)
                             await self.session.commit()
                         except Exception as db_err:
-                            logger.error("Failed to mark company %s as FAILED: %s", company.name, db_err)
+                            logger.error("Failed to delete company %s on error: %s", co_name, db_err)
                     finally:
-                        # Release company lease lock
+                        # Release company lease lock if record still exists
                         try:
-                            await CompanyRepository.release_lease(self.session, company.id)
+                            await CompanyRepository.release_lease(self.session, co_id)
                             await self.session.commit()
                         except Exception as rel_err:
-                            logger.debug("Error releasing lease for %s: %s", company.name, rel_err)
+                            logger.debug("Error releasing lease for %s: %s", co_name, rel_err)
 
                         # Update running counters in database
                         try:
@@ -272,11 +296,31 @@ class PipelineOrchestrator:
 
             result.status = terminal_status
 
+            run_metadata = {
+                "errors": result.errors,
+                "company_results": [
+                    {
+                        "company_id": str(r.company_id),
+                        "company_name": r.company_name,
+                        "website_url": r.website_url,
+                        "status": str(r.status),
+                        "fit": str(r.fit_decision) if r.fit_decision else None,
+                        "confidence": r.confidence,
+                        "reasoning": r.reasoning,
+                        "follow_up_question": r.follow_up_question,
+                        "is_synced": r.is_synced,
+                        "error": r.error,
+                        "duration_ms": r.duration_ms,
+                    }
+                    for r in result.company_results
+                ],
+            }
+
             await PipelineRunRepository.complete_run(
                 session=self.session,
                 run_id=run_id,
                 status=terminal_status,
-                error_summary={"errors": result.errors} if result.errors else None,
+                error_summary=run_metadata,
             )
             await self.session.commit()
 

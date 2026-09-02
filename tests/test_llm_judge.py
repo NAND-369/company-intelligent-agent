@@ -156,20 +156,19 @@ async def test_parser_one_shot_repair_success() -> None:
 
 @pytest.mark.asyncio
 async def test_parser_repair_failure_fallback_uncertain() -> None:
-    """Test that when 1-shot repair also fails, a safe UNCERTAIN verdict is generated."""
+    """Test that when 1-shot repair also fails, LLMParseError is raised rather than a misleading verdict."""
+    from app.llm.parser import LLMParseError
+
     broken_json = 'unparseable garbage'
     still_broken_repair = 'still broken garbage'
 
     fake_client = FakeLLMClient(responses=[still_broken_repair])
-    verdict = await LLMOutputParser.parse_and_validate(
-        raw_text=broken_json,
-        llm_client=fake_client,
-        allow_repair=True,
-    )
-
-    assert verdict.fit == FitDecision.UNCERTAIN
-    assert verdict.confidence == 0.0
-    assert "failed" in verdict.reasoning[0].lower() and "validation" in verdict.reasoning[0].lower()
+    with pytest.raises(LLMParseError):
+        await LLMOutputParser.parse_and_validate(
+            raw_text=broken_json,
+            llm_client=fake_client,
+            allow_repair=True,
+        )
 
 
 # ==============================================================================
@@ -298,7 +297,7 @@ async def test_llm_judge_insufficient_evidence_verdict(db_session: AsyncSession)
 
 @pytest.mark.asyncio
 async def test_llm_judge_provider_outage_fallback(db_session: AsyncSession) -> None:
-    """Test that provider errors (outage / 503 / unhandled) safely record UNCERTAIN verdict without crashing."""
+    """Test that provider errors (outage / 503 / unhandled) raise LLMClientError without persisting a verdict."""
     company = await CompanyRepository.create(
         session=db_session,
         name="Crash Test Co",
@@ -312,12 +311,12 @@ async def test_llm_judge_provider_outage_fallback(db_session: AsyncSession) -> N
             raise LLMClientError("Gemini API HTTP 503 Service Unavailable")
 
     service = LLMJudgeService(session=db_session, llm_client=OutageClient())
-    verdict = await service.evaluate_company(company.id)
+    with pytest.raises(LLMClientError):
+        await service.evaluate_company(company.id)
 
-    assert verdict is not None
-    assert verdict.fit == FitDecision.UNCERTAIN
-    assert verdict.confidence == 0.0
-    assert "HTTP 503" in verdict.reasoning[0]
+    # Verify no verdict was persisted in PostgreSQL
+    verdict = await VerdictRepository.get_latest_by_company(db_session, company.id)
+    assert verdict is None
 
 
 @pytest.mark.asyncio
